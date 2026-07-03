@@ -68,6 +68,5 @@ vcpkg_installed/
 Testing/
 .cache/
 
-
 ./plans
 ./.vscode
