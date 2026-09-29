@@ -26,6 +26,12 @@ jobs:
 
       - uses: arduino/setup-arduino-cli@v2
 
+      - name: Free disk space (runner bloat vs. the ~10 GB ESP32 toolchain set)
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+            /usr/local/.ghcup /opt/hostedtoolcache/CodeQL || true
+          df -h / | tail -1
+
       - name: Register the Espressif (arduino-esp32) platform
         run: arduino-cli config add board_manager.additional_urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
 
