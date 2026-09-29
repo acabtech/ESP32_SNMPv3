@@ -1,0 +1,14 @@
+SnmpV3Agent	KEYWORD1
+SNMPv3	LITERAL1
+begin	KEYWORD2
+addUser	KEYWORD2
+setEngineId	KEYWORD2
+registerScalar	KEYWORD2
+registerTable	KEYWORD2
+setTrapManager	KEYWORD2
+sendTrap	KEYWORD2
+sendInform	KEYWORD2
+engineBoots	KEYWORD2
+loop	KEYWORD2
+USM	LITERAL1
+authPriv	LITERAL1

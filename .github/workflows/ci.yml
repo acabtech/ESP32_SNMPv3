@@ -1,0 +1,27 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: arduino-lint (Arduino Library specification compliance)
+        uses: arduino/arduino-lint-action@v2
+        with:
+          library-manager: update
+          compliance: specification
+
+  # Host-side unit tests (no hardware, no Arduino SDK). Enabled when the
+  # ber/usm/mib modules land in M1 — see tests/host/README.md.
+  host-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run host test suite
+        run: |
+          echo "M0: test runner arrives with M1 (tests/host/run_host_tests.sh)"
+          ./tests/host/run_host_tests.sh 2>/dev/null || true

@@ -1,0 +1,37 @@
+name: Compile Examples
+
+# Compiles every example in examples/ for the three supported FQBNs.
+# Currently gated to manual runs: enabled for push/PR in M1 once the stub
+# core is replaced by real code (until then examples compile but agent
+# begin() returns false at runtime — a red compile job would be noise).
+on:
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        fqbn:
+          - esp32:esp32:esp32     # classic ESP32
+          - esp32:esp32:esp32s3   # ESP32-S3
+          - esp32:esp32:esp32s2   # ESP32-S2
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: arduino/setup-arduino-cli@v2
+
+      - name: Register the Espressif (arduino-esp32) platform
+        run: arduino-cli config add board_manager.additional_urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+
+      - name: Install ESP32 core v3.x + sensor library
+        run: |
+          arduino-cli core update-index
+          arduino-cli core install esp32:esp32
+          arduino-cli lib install "DHT sensor library by Adafruit"
+
+      - name: Compile all examples
+        uses: arduino/actions/libraries/compile-examples@v1
+        with:
+          fqbn: ${{ matrix.fqbn }}

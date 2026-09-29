@@ -1,0 +1,22 @@
+# Arduino / arduino-cli
+*.ino.c
+.arduino/
+build/
+dist/
+
+# Editors / OS
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+
+# Python (interop tooling)
+__pycache__/
+*.pyc
+.venv/
+
+# Testing artifacts
+/tmp/
+*.log
+core.*
