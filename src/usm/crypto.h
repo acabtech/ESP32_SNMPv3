@@ -17,6 +17,10 @@
 #include <stdint.h>
 #include <stddef.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // Opaque incremental SHA-256 state. Sized to fit both backends
 // (soft: 112 B, mbedtls 3.x context: < 160 B). Bump if a backend outgrows it.
 // The union guarantees 8-byte alignment for backends whose context embeds
@@ -42,4 +46,7 @@ void crypto_aes128_enc(const uint8_t key[16], const uint8_t in[16],
 void crypto_aes128_dec(const uint8_t key[16], const uint8_t in[16],
                        uint8_t out[16]);
 
+#ifdef __cplusplus
+}
+#endif
 #endif  // SNMPV3_CRYPTO_H

@@ -9,12 +9,16 @@
 int test_soft(void);
 int test_ber(void);
 int test_usm(void);
+int test_mib(void);
+int test_agent(void);
 
 int main(void) {
   int fails = 0;
   fails += test_soft();
   fails += test_ber();
   fails += test_usm();
+  fails += test_mib();
+  fails += test_agent();
   if (fails == 0) {
     printf("\nALL HOST TESTS PASSED\n");
     return 0;

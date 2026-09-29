@@ -402,6 +402,153 @@ def emit_vectors():
     A("// plaintext scopedPDU of sample B (for decrypt assertion)\n")
     ba("V_MSG_B_PLAIN", scoped_plain)
 
+    # --- M2 wire oracles: full request/response roundtrips ------------------
+    # Independent reconstruction of the agent pipeline (RFC 3412/3414/3826):
+    # a Python-built authPriv request goes in; the byte-exact expected
+    # response (same MAC/CFB machinery, mirrored) must come out.
+    def usm_sp(engine_id, boots, time, user, auth_params, priv_params):
+        return ber_seq(ber_octet(engine_id), ber_int(boots), ber_int(time),
+                       ber_octet(user), ber_octet(auth_params),
+                       ber_octet(priv_params))
+
+    def build_request(msg_id, max_size, flags, sp, scoped_plain,
+                      auth_key, priv_key16, salt, boots, time):
+        iv = boots.to_bytes(4, "big") + time.to_bytes(4, "big") + salt
+        ct = cfb128(priv_key16, iv, scoped_plain)
+        body = (ber_int(3) + ber_int(msg_id) + ber_int(max_size)
+                + ber_octet(bytes([flags])) + ber_int(3) + ber_octet(sp))
+        msg = ber_seq(body + ber_octet(ct))
+        marker = b"\xaa" * 24
+        sp_marked = sp.replace(ber_octet(marker) if False else sp[:0], b"")
+        # build with marker in authParams for zeroing
+        return None  # replaced below
+
+    # Request builder (authPriv): full envelope with correct MAC + CFB.
+    def make_authpriv_request(msg_id, max_size, req_pdu, engine_id, boots,
+                              time, user, auth_key, priv_key16, salt):
+        scoped = ber_seq(ber_octet(engine_id), ber_octet(b""), req_pdu)
+        iv = boots.to_bytes(4, "big") + time.to_bytes(4, "big") + salt
+        ct = cfb128(priv_key16, iv, scoped)
+        marker = b"\xaa" * 24
+        sp = ber_seq(ber_octet(engine_id), ber_int(boots), ber_int(time),
+                     ber_octet(user), ber_octet(marker), ber_octet(salt))
+        body = (ber_int(3) + ber_int(msg_id) + ber_int(max_size)
+                + ber_octet(bytes([0x07])) + ber_int(3) + ber_octet(sp))
+        msg = ber_seq(body + ber_octet(ct))
+        zeroed = msg.replace(marker, b"\x00" * 24, 1)
+        mac = hmac_mod.new(auth_key, zeroed, hashlib.sha256).digest()[:24]
+        return msg.replace(marker, mac, 1)
+
+    # Expected authPriv response (byte-exact mirror of the agent assembly).
+    def make_authpriv_response(req_msg_id, req_id, resp_vbs, engine_id,
+                               boots, time, user, auth_key, priv_key16,
+                               salt, max_size=1500):
+        pdu = ber_pdu(0xA2, req_id, 0, 0, resp_vbs)
+        scoped = ber_seq(ber_octet(engine_id), ber_octet(b""), pdu)
+        iv = boots.to_bytes(4, "big") + time.to_bytes(4, "big") + salt
+        ct = cfb128(priv_key16, iv, scoped)
+        marker = b"\xaa" * 24
+        sp = ber_seq(ber_octet(engine_id), ber_int(boots), ber_int(time),
+                     ber_octet(user), ber_octet(marker), ber_octet(salt))
+        body = (ber_int(3) + ber_int(req_msg_id) + ber_int(max_size)
+                + ber_octet(bytes([0x03])) + ber_int(3) + ber_octet(sp))
+        msg = ber_seq(body + ber_octet(ct))
+        zeroed = msg.replace(marker, b"\x00" * 24, 1)
+        mac = hmac_mod.new(auth_key, zeroed, hashlib.sha256).digest()[:24]
+        return msg.replace(marker, mac, 1)
+
+    # Expected discovery Report response (RFC 3412 §7.2.6 / RFC 3414 §4).
+    def make_report_response(req_msg_id, req_id, stat_arcs, stat_value,
+                             engine_id, boots, time, max_size=1500):
+        c32 = bytes([0x41, 4]) + stat_value.to_bytes(4, "big")
+        pdu = ber_pdu(0xA8, req_id, 0, 0, [ber_varbind(stat_arcs, c32)])
+        scoped = ber_seq(ber_octet(engine_id), ber_octet(b""), pdu)
+        sp = ber_seq(ber_octet(engine_id), ber_int(boots), ber_int(time),
+                     ber_octet(b""), ber_octet(b"\x00" * 24),
+                     ber_octet(b"\x00" * 8))
+        body = (ber_int(3) + ber_int(req_msg_id) + ber_int(max_size)
+                + ber_octet(bytes([0x04])) + ber_int(3) + ber_octet(sp))
+        return ber_seq(body + scoped)
+
+    # Scenario constants (must match test_agent.c).
+    m2_boots, m2_time = 5, 5           # engine boots; request carries time 5
+    m2_init_ms = 100000                # agentInit(nowMs)
+    m2_proc_ms = 105000                # agentProcess(nowMs) -> engineTime 5
+    salt_seed = (m2_boots << 32) | (m2_init_ms // 1000)   # agentInit seeding
+    resp_salt = ((salt_seed + 1) & 0xFFFFFFFFFFFFFFFF).to_bytes(8, "big")
+
+    sysdescr_oid = (1, 3, 6, 1, 2, 1, 1, 1, 0)
+    sysname_oid  = (1, 3, 6, 1, 2, 1, 1, 5, 0)
+    uptime_oid   = (1, 3, 6, 1, 2, 1, 1, 3, 0)
+    unkeng_oid   = (1, 3, 6, 1, 6, 3, 15, 1, 1, 4, 0)
+    sysdescr_str = b"ESP32-SNMPv3-Agent"
+
+    # 1) authPriv GET sysDescr.0 -> byte-exact GetResponse
+    req_get = make_authpriv_request(
+        777, 65507, ber_pdu(0xA0, 42, 0, 0, [ber_varbind(sysdescr_oid, ber_null())]),
+        ENGINE_ID, m2_boots, m2_time, b"telemetry",
+        auth_key, priv_key, b"\x00" * 7 + b"\x01")
+    resp_get = make_authpriv_response(
+        777, 42, [ber_varbind(sysdescr_oid, ber_octet(sysdescr_str))],
+        ENGINE_ID, m2_boots, m2_time, b"telemetry",
+        auth_key, priv_key, resp_salt)
+
+    # 2) discovery (noAuthNoPriv, empty engineID/user) -> byte-exact Report
+    req_disc = ber_seq(
+        ber_int(3) + ber_int(888) + ber_int(65507) + ber_octet(bytes([0x04]))
+        + ber_int(3)
+        + ber_octet(ber_seq(ber_octet(b""), ber_int(0), ber_int(0),
+                            ber_octet(b""), ber_octet(b"\x00" * 24),
+                            ber_octet(b"\x00" * 8)))
+        + ber_seq(ber_octet(b""), ber_octet(b""),
+                  ber_pdu(0xA0, 4242, 0, 0, [ber_varbind(sysdescr_oid, ber_null())])))
+    resp_disc = make_report_response(888, 4242, unkeng_oid, 1,
+                                     ENGINE_ID, m2_boots, m2_time)
+
+    # 3) stale engineTime (delta 1000 s > 150 s window) -> NotInTimeWindows
+    req_stale = make_authpriv_request(
+        778, 65507, ber_pdu(0xA0, 43, 0, 0, [ber_varbind(sysdescr_oid, ber_null())]),
+        ENGINE_ID, m2_boots, 1005, b"telemetry",
+        auth_key, priv_key, b"\x00" * 7 + b"\x01")
+
+    # 4) unknown user name -> UnknownUserNames (MAC invalid, checked later)
+    req_unknown = make_authpriv_request(
+        779, 65507, ber_pdu(0xA0, 44, 0, 0, [ber_varbind(sysdescr_oid, ber_null())]),
+        ENGINE_ID, m2_boots, m2_time, b"intruder",
+        auth_key, priv_key, b"\x00" * 7 + b"\x01")
+
+    # 5) SET sysName.0 = "hobbes" (OCTET STRING) -> structural checks
+    req_set = make_authpriv_request(
+        780, 65507, ber_pdu(0xA3, 45, 0, 0, [ber_varbind(sysname_oid, ber_octet(b"hobbes"))]),
+        ENGINE_ID, m2_boots, m2_time, b"telemetry",
+        auth_key, priv_key, b"\x00" * 7 + b"\x01")
+
+    # 6) GETNEXT from sysUpTime.0 -> structural checks (expect sysContact.0)
+    req_next = make_authpriv_request(
+        781, 65507, ber_pdu(0xA1, 46, 0, 0, [ber_varbind(uptime_oid, ber_null())]),
+        ENGINE_ID, m2_boots, m2_time, b"telemetry",
+        auth_key, priv_key, b"\x00" * 7 + b"\x01")
+
+    A("// --- M2 wire oracles ---------------------------------------------------\n")
+    ba("V_M2_ENGID", ENGINE_ID)
+    ba("V_REQ_GET", req_get)
+    ba("V_RESP_GET", resp_get)
+    ba("V_REQ_DISCOVERY", req_disc)
+    ba("V_RESP_DISCOVERY", resp_disc)
+    ba("V_REQ_STALE", req_stale)
+    ba("V_REQ_UNKNOWN_USER", req_unknown)
+    ba("V_REQ_SET_NAME", req_set)
+    ba("V_REQ_NEXT", req_next)
+    A("#define V_M2_ENGID_LEN %d\n" % len(ENGINE_ID))
+    A("#define V_M2_BOOTS %du\n" % m2_boots)
+    A("#define V_M2_REQ_TIME %du\n" % m2_time)
+    A("#define V_M2_INIT_MS %du\n" % m2_init_ms)
+    A("#define V_M2_PROC_MS %du\n" % m2_proc_ms)
+    A("#define V_M2_SYSDSCR \"%s\"\n" % sysdescr_str.decode())
+    A("#define V_M2_SYSDSCR_LEN %d\n" % len(sysdescr_str))
+    print(f"    M2 oracles OK (req {len(req_get)} B, resp {len(resp_get)} B, "
+          f"disc {len(req_disc)} B)")
+
     A("#endif  // SNMPV3_TEST_VECTORS_H\n")
     (VEC / "vectors.h").write_text("".join(L))
     print(f"vectors.h written ({len(msg_a)} B msg A, {len(msg_b)} B msg B)")

@@ -103,6 +103,36 @@ int berDecodeInt32(const uint8_t* in, size_t max, size_t* pos, int32_t* v) {
 }
 
 // --- OCTET STRING / NULL ---------------------------------------------------
+int berEncodeUint32(uint8_t* out, size_t cap, uint32_t v) {
+  return berEncodeUintTagged(out, cap, BER_TAG_INTEGER, v);
+}
+
+int berEncodeUintTagged(uint8_t* out, size_t cap, uint8_t tag, uint32_t v) {
+  // Counter32/Unsigned32/TimeTicks are implicit-width 4-octet SMI types
+  // (RFC 2578 §7.10): emit the full 4 bytes so parsers never misread a
+  // high-bit value as negative. (INTEGER, by contrast, uses minimal
+  // two's-complement encoding via berEncodeInt32.)
+  uint8_t body[4];
+  for (int i = 0; i < 4; i++) body[i] = (uint8_t)(v >> (24 - 8 * i));
+  return berEncodeTlv(out, cap, tag, body, 4);
+}
+
+int berDecodeUint32(const uint8_t* in, size_t max, size_t* pos, uint32_t* v) {
+  uint8_t tag; size_t len;
+  int r = berDecodeTlv(in, max, pos, &tag, &len);
+  if (r < 0) return r;
+  if (tag != BER_TAG_INTEGER) return BER_ERR_TYPE;
+  if (len == 0 || len > 5) return BER_ERR_LENGTH;
+  uint32_t out = 0;
+  for (size_t i = 0; i < len; i++) {
+    if (i == 4) return BER_ERR_LENGTH;
+    out = (out << 8) | in[*pos + i];
+  }
+  *pos += len;
+  *v = out;
+  return BER_OK;
+}
+
 int berEncodeOctetString(uint8_t* out, size_t cap,
                          const uint8_t* s, size_t len) {
   return berEncodeTlv(out, cap, BER_TAG_OCTET_STRING, s, len);

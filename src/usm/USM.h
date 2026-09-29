@@ -24,6 +24,10 @@
 #include <stddef.h>
 #include <stdbool.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define SNMPV3_SHA256_KEY      32   // localized auth key length (hash size)
 #define SNMPV3_SHA256_MAC      24   // RFC 7860 §4.2: truncated HMAC output
 #define SNMPV3_AES128_KEY      16   // RFC 3826: first half of local. priv key
@@ -121,4 +125,7 @@ uint32_t usmTimeNow(const UsmEngineClock* clock, uint32_t nowMs);
 int usmTimelinessCheck(const UsmEngineClock* authoritative,
                        uint32_t boots, uint32_t time, uint32_t nowMs);
 
+#ifdef __cplusplus
+}
+#endif
 #endif  // SNMPV3_USM_H

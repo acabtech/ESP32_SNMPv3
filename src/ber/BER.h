@@ -15,7 +15,11 @@
 #include <stdint.h>
 #include <stddef.h>
 
-// Universal + SNMP context tags (RFC 3416 §6, X.690).
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+// Universal + SNMP context/application tags (RFC 2578 §8, RFC 3416 §6, X.690).
 typedef enum {
   BER_TAG_INTEGER       = 0x02,
   BER_TAG_OCTET_STRING  = 0x04,
@@ -29,8 +33,27 @@ typedef enum {
   BER_TAG_GET_BULK      = 0xA5,
   BER_TAG_INFORM_REQ    = 0xA6,
   BER_TAG_TRAP_V2       = 0xA7,
-  BER_TAG_REPORT        = 0xA8
+  BER_TAG_REPORT        = 0xA8,
+  // SNMPv2-SMI application class (implicit CONTEXT 0 primitive exceptions are
+  // how v2/v3 express per-varbind errors; tags per RFC 2578 §8).
+  BER_TAG_COUNTER32     = 0x41,
+  BER_TAG_UNSIGNED32    = 0x42,
+  BER_TAG_TIMETICKS     = 0x43,
+  BER_TAG_NOSUCHOBJECT  = 0x81,   // noSuchObject    (context 0, primitive)
+  BER_TAG_NOSUCHINSTANCE= 0x82,   // noSuchInstance  (context 1, primitive)
+  BER_TAG_ENDOFMIBVIEW  = 0x83    // endOfMibView    (context 2, primitive)
 } BerTag;
+
+// PDU error-status values (RFC 3416 §2).
+typedef enum {
+  SNMP_ERR_NO_ERROR      = 0,
+  SNMP_ERR_TOO_BIG       = 1,
+  SNMP_ERR_GEN_ERR       = 5,
+  SNMP_ERR_NO_ACCESS     = 6,
+  SNMP_ERR_WRONG_TYPE    = 7,
+  SNMP_ERR_WRONG_VALUE   = 10,
+  SNMP_ERR_NOT_WRITABLE  = 17
+} SnmpErrStatus;
 
 // Negative error codes (positive = bytes written/consumed).
 typedef enum {
@@ -56,6 +79,13 @@ int berDecodeTlv(const uint8_t* in, size_t max, size_t* pos,
 // --- Universal types -------------------------------------------------------
 int berEncodeInt32(uint8_t* out, size_t cap, int32_t v);
 int berDecodeInt32(const uint8_t* in, size_t max, size_t* pos, int32_t* v);
+// Unsigned INTEGER semantics (Counter32/Unsigned32/TimeTicks payloads use
+// this body under their application tags).
+int berEncodeUint32(uint8_t* out, size_t cap, uint32_t v);
+int berDecodeUint32(const uint8_t* in, size_t max, size_t* pos, uint32_t* v);
+// Same minimal unsigned body under an arbitrary tag (0x41 Counter32,
+// 0x42 Unsigned32, 0x43 TimeTicks, 0x02 INTEGER).
+int berEncodeUintTagged(uint8_t* out, size_t cap, uint8_t tag, uint32_t v);
 int berEncodeOctetString(uint8_t* out, size_t cap,
                          const uint8_t* s, size_t len);
 int berEncodeNull(uint8_t* out, size_t cap);
@@ -128,4 +158,7 @@ int berDecodeV3Message(const uint8_t* in, size_t max,
                        size_t* secParamsOff, size_t* secParamsLen,
                        size_t* scopedPduOff, size_t* scopedPduLen);
 
+#ifdef __cplusplus
+}
+#endif
 #endif  // SNMPV3_BER_H
