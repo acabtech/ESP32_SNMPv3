@@ -35,7 +35,9 @@ jobs:
           arduino-cli core install esp32:esp32
           arduino-cli lib install "DHT sensor library by Adafruit"
 
+      # SHA-pinned 2026-09-29: the upstream repo has no version tags (the
+      # floating @v1 ref does not resolve and fails the job at 'Set up job').
       - name: Compile all examples
-        uses: arduino/actions/libraries/compile-examples@v1
+        uses: arduino/actions/libraries/compile-examples@3a9ca335ba366215f4dcc195794585ae625c859f
         with:
           fqbn: ${{ matrix.fqbn }}
