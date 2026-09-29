@@ -43,7 +43,14 @@ jobs:
 
       # SHA-pinned 2026-09-29: the upstream repo has no version tags (the
       # floating @v1 ref does not resolve and fails the job at 'Set up job').
+      # The action runs in Docker with its own home: runner-side lib installs
+      # are invisible, so library deps must come through the `libraries` input
+      # (source-path ./ installs THIS repo as the library under test).
       - name: Compile all examples
         uses: arduino/actions/libraries/compile-examples@3a9ca335ba366215f4dcc195794585ae625c859f
         with:
           fqbn: ${{ matrix.fqbn }}
+          libraries: |
+            - source-path: ./
+            - name: DHT sensor library
+            - name: Adafruit Unified Sensor
