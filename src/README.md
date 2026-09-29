@@ -9,8 +9,9 @@ per docs/ROADMAP.md):
 | `SnmpV3Agent.cpp` | Agent state machine, UDP transport, dispatch (stub). |
 | `ber/BER.h`     | ASN.1 BER codec primitives (host-compilable).       |
 | `usm/USM.h`     | RFC 3414/7860/3826: keys, HMAC-SHA-256, AES-128-CFB, timeliness. |
+| `usm/crypto.h`  | Crypto seam: SHA-256 + AES-128 block primitives.      |
+| `usm/crypto_esp32.c` | mbedtls/HW-accelerated backend (device-only; host tests link `tests/host/soft` instead). |
 | `mib/MIB.h`     | Managed-object tree (scalars, RW scalars, tables).   |
-| `crypto/`       | *(planned)* mbedtls/HW-accelerated backend + host software reference. |
 
 Design constraints (see docs/DESIGN.md):
 

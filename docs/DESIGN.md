@@ -86,12 +86,14 @@ sub-millisecond on the hardware engines, non-blocking in `loop()`.
 
 ## 4. Open items
 
-- [ ] IANA **PEN** request for a clean `enterprises.<PEN>` root (placeholder
-      `99999` in examples is NOT to ship in docs marketed externally).
-- [ ] Confirm GitHub org/account for the public repo (`library.properties`
-      `url` currently assumes `github.com/alatcerdas/…`).
+- [x] **IANA PEN** — application filed (in progress); OID root below
+      `enterprises.<PEN>` to be swapped in when granted. Not highlighted in
+      code per maintainer direction.
+- [x] GPL **`only`** confirmed (SPDX `GPL-3.0`).
+- [x] pysnmp oracle pinned to **6.2.6** (SHA-2 auth protocol via
+      `pysnmp.proto.secmod.rfc7860`; hlapi sync facade retained).
+- [ ] Confirm GitHub org/account for the public repo
+      (currently `acabtech/esp32-snmpv3-agent`, private; pushes via the
+      `hamoodify` gh account).
 - [ ] Verify net-snmp SHA-256 availability on Debian's build (must be ≥ 5.8
       with SHA-2 enabled) — affects the interop runbook, not the library.
-- [ ] Decide GPL-3.0 `only` vs `or-later` on the SPDX line (currently `only`).
-- [ ] Confirm pysnmp version pin for `tests/interop/pysnmp_check.py`
-      (SHA-2 auth protocol constants differ across 4.x/6.x/lextudio forks).

@@ -1,14 +1,12 @@
-// BER.h — ASN.1 BER codec interface for SNMP messages (M0 scaffold).
+// BER.h — ASN.1 BER codec for SNMP messages (RFC 3416 §6/§8, X.690).
 //
-// Host-compilable: no Arduino/types dependency so the codec runs in the
-// host unit-test harness (tests/host) and inside the ESP32.
+// Host-compilable: no Arduino/ESP-IDF includes, so the codec is exercised in
+// the host unit-test harness (tests/host) and inside the ESP32.
 //
 // Conventions:
-//   • Return values >= 0 are byte counts; negative values are errors
-//     (see BerError below).
-//   • Decoder functions advance the caller's position cursor by reference
-//     (like `pp`/`ph` in RFCs).
-//   • All encoding is big-endian (network order), per BER.
+//   • Return values >= 0 are byte counts; negatives are errors (BerError).
+//   • Decoders advance a position cursor by reference.
+//   • Big-endian (network order) per BER.
 //
 // SPDX-License-Identifier: GPL-3.0
 #ifndef SNMPV3_BER_H
@@ -17,15 +15,13 @@
 #include <stdint.h>
 #include <stddef.h>
 
-// Universal tags used by SNMP (RFC 3416 / X.690).
+// Universal + SNMP context tags (RFC 3416 §6, X.690).
 typedef enum {
   BER_TAG_INTEGER       = 0x02,
   BER_TAG_OCTET_STRING  = 0x04,
   BER_TAG_NULL          = 0x05,
   BER_TAG_OID           = 0x06,
   BER_TAG_SEQUENCE      = 0x30,
-  // varbind / PDU tags (context-specific, constructed):
-  BER_TAG_VARBIND_SEQ   = 0x30,             // same wire encoding as SEQUENCE
   BER_TAG_GET_REQ       = 0xA0,
   BER_TAG_GET_NEXT_REQ  = 0xA1,
   BER_TAG_RESPONSE      = 0xA2,
@@ -33,22 +29,21 @@ typedef enum {
   BER_TAG_GET_BULK      = 0xA5,
   BER_TAG_INFORM_REQ    = 0xA6,
   BER_TAG_TRAP_V2       = 0xA7,
-  BER_TAG_REPORT        = 0xA8,
-  // Message-wrapping tags (RFC 3412 §6):
-  BER_TAG_MSG_SEQ       = 0x30,
-  BER_TAG_MSG_SECPARAMS = 0x30,
-  BER_TAG_SCOPED_PDU    = 0x30
+  BER_TAG_REPORT        = 0xA8
 } BerTag;
 
 // Negative error codes (positive = bytes written/consumed).
 typedef enum {
   BER_OK            = 0,
-  BER_ERR_TRUNCATED = -1,   // buffer too small / input exhausted
-  BER_ERR_LENGTH    = -2,   // length > 127 (indefinite/long-form) unsupported
-  BER_ERR_OVERFLOW  = -3,   // value does not fit target type
-  BER_ERR_OID       = -4,   // OID malformed (leading arcs)
-  BER_ERR_TYPE      = -5    // tag mismatch vs expected
+  BER_ERR_TRUNCATED = -1,
+  BER_ERR_LENGTH    = -2,   // indefinite/non-minimal/oversized length
+  BER_ERR_OVERFLOW  = -3,
+  BER_ERR_OID       = -4,
+  BER_ERR_TYPE      = -5
 } BerError;
+
+// Max arcs in a varbind name (more than enough for IANA OIDs).
+#define BER_OID_MAX_ARCS 64
 
 // --- TLV primitives --------------------------------------------------------
 int berEncodeLength(uint8_t* out, size_t cap, size_t len);
@@ -65,31 +60,72 @@ int berEncodeOctetString(uint8_t* out, size_t cap,
                          const uint8_t* s, size_t len);
 int berEncodeNull(uint8_t* out, size_t cap);
 
-// OIDs: arrays of 32-bit arcs (first two arcs already combined per BER
-// 8.19: 1.3 => 43). Sub-identifiers > 2^31 not supported (fine for SNMP
-// OIDs as assigned by IANA).
+// OIDs as arrays of 32-bit arcs. First two arcs are combined per BER 8.19.
 int berEncodeOid(uint8_t* out, size_t cap, const uint32_t* arcs, size_t nArcs);
 int berDecodeOid(const uint8_t* in, size_t max, size_t* pos,
                  uint32_t* arcs, size_t* nArcs);
 
-// --- SNMP message assembly -------------------------------------------------
-// Request/response header fields (RFC 3416 §3.2):
-typedef struct {
-  uint32_t msgID;
-  uint8_t  msgFlags;      // bit0 auth, bit1 priv, bit2 reportable
-  uint8_t  secModel;      // 3 = USM
-  // security-parameters (USM): engineID, engineBoots, engineTime,
-  // username, authParams(12), privParams(8) — serialized by USM layer.
-  const uint8_t* engineId;    size_t engineIdLen;
-  uint32_t       engineBoots; uint32_t engineTime;
-  const uint8_t* username;    size_t usernameLen;
-  const uint8_t* authParams;  // HMAC-SHA-256 output = 32 bytes
-  const uint8_t* privParams;  // AES salt = 8 bytes
-} BerMsgHeader;
+// --- Varbinds (RFC 3416 §8.4) ----------------------------------------------
+// Encode: value = generic BER TLV bytes (caller builds INTEGER/OCTET/etc.).
+int berEncodeVarbind(uint8_t* out, size_t cap,
+                     const uint32_t* name, size_t nameLen,
+                     const uint8_t* valueTlv, size_t valueLen);
+// Decode: value is left unparsed (offset/len + tag), so the caller decides
+// how to interpret it (agent core, M2).
+int berDecodeVarbind(const uint8_t* in, size_t max, size_t* pos,
+                     uint32_t* name, size_t* nameLen,
+                     uint8_t* valueTag, size_t* valueOff, size_t* valueLen);
 
-// ScopedPDU body (RFC 3412 §6.2: contextEngineID, contextName, PDU).
-// TODO(M1): berEncodeScopedPdu / berEncodePdu / berEncodeVarbind helpers
-// and decoders, implemented against RFC 3416 §6 + §8 and validated with the
-// test vectors in tests/host.
+// --- Varbind lists & PDUs (RFC 3416 §8.6) ----------------------------------
+typedef struct {
+  uint32_t  name[BER_OID_MAX_ARCS];
+  size_t    nameLen;
+  const uint8_t* valueTlv;   // encode: pre-built BER TLV of the value
+  size_t    valueLen;
+  uint8_t   decValueTag;     // decode: value tag
+  size_t    decValueOff;     // decode: value octets offset into input buffer
+  size_t    decValueLen;
+} BerVarbind;
+
+// Uniform 3-integer header: for GETBULK the RFC overrides the fields
+// (non-repeaters/max-repetitions) but layout is identical, so one code path.
+int berEncodePdu(uint8_t* out, size_t cap, uint8_t pduTag,
+                 uint32_t reqId, uint32_t status, uint32_t idx,
+                 const BerVarbind* vbs, size_t nvbs);
+int berDecodePdu(const uint8_t* in, size_t max, size_t* pos,
+                 uint8_t* pduTag, uint32_t* reqId,
+                 uint32_t* status, uint32_t* idx,
+                 BerVarbind* vbs, size_t maxVbs, size_t* nvbs);
+
+// --- ScopedPDU (RFC 3412 §6.2) ---------------------------------------------
+// contextEngineID / contextName are octet strings; pdu is already-encoded
+// PDU TLV bytes (this is what gets encrypted for authPriv).
+int berEncodeScopedPdu(uint8_t* out, size_t cap,
+                       const uint8_t* ctxEngineId, size_t ctxEngineIdLen,
+                       const uint8_t* ctxName, size_t ctxNameLen,
+                       const uint8_t* pdu, size_t pduLen);
+int berDecodeScopedPdu(const uint8_t* in, size_t max, size_t* pos,
+                       size_t* ctxEngineIdOff, size_t* ctxEngineIdLen,
+                       size_t* ctxNameOff, size_t* ctxNameLen,
+                       size_t* pduOff, size_t* pduLen);
+
+// --- v3 message envelope (RFC 3412 §6) -----------------------------------
+// `scopedPdu` bytes are the msgData region: with the privFlag (bit1) set they
+// are the encrypted scopedPDU and get wrapped in an OCTET STRING; without it
+// they are the plaintext scopedPDU TLV and are appended as-is.
+// berDecodeV3Message returns the msgData region ready for the caller:
+//   priv    -> ciphertext content bytes (decrypt, then berDecodeScopedPdu)
+//   no priv -> the full plaintext scopedPDU TLV (berDecodeScopedPdu directly)
+// secParams is the raw USM SEQUENCE bytes (wrapped in an OCTET STRING here).
+int berEncodeV3Message(uint8_t* out, size_t cap,
+                       uint32_t msgId, uint32_t maxSize,
+                       uint8_t msgFlags, uint8_t secModel,
+                       const uint8_t* secParams, size_t secParamsLen,
+                       const uint8_t* scopedPdu, size_t scopedPduLen);
+int berDecodeV3Message(const uint8_t* in, size_t max,
+                       uint8_t* version, uint32_t* msgId, uint32_t* maxSize,
+                       uint8_t* msgFlags, uint8_t* secModel,
+                       size_t* secParamsOff, size_t* secParamsLen,
+                       size_t* scopedPduOff, size_t* scopedPduLen);
 
 #endif  // SNMPV3_BER_H

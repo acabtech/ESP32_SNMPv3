@@ -1,6 +1,6 @@
 # Roadmap
 
-Milestones with exit criteria. Current position: **M0 done** (2026-09-29).
+Milestones with exit criteria. Current position: **M1 core done** (2026-09-29).
 
 ## M0 — Scaffold (✅)
 - Repo structure per Arduino library spec, `library.properties`, GPL-3.0
@@ -14,15 +14,26 @@ Milestones with exit criteria. Current position: **M0 done** (2026-09-29).
 Exit: `arduino-lint` passes; examples compile against stub API
 (compile-examples job is gated on workflow_dispatch until M1 lands).
 
-## M1 — Codec + USM core (host-tested)
-- BER encode/decode: TLV → message → scopedPDU → varbinds (RFC 3416 §6/§8).
-- USM: passphrase limiting, SHA-256 passwordToKey + key localization
-  (RFC 3414 §A.2/§A.3), HMAC-SHA-256 (RFC 7860), AES-128-CFB (RFC 3826),
-  msgFlags/securityParams wire layout, timeliness window.
-- `tests/host/`: RFC test vectors + property tests (fuzz BER round-trip).
-- Decision: mbedtls/HW backend vs glue over HW AES-ECB for CFB.
+## M1 — Codec + USM core (host-tested) ✅
+- **BER codec** (`src/ber/BER.c`): lengths, INTEGER, OID, varbind, PDU,
+  scopedPDU, full v3 message envelope — decode + encode.
+- **USM layer** (`src/usm/USM.c`): SHA-256 passwordToKey/key localization
+  (RFC 7860 §9.3), HMAC-SHA-256 with 24-octet MAC (RFC 7860), AES-128-CFB
+  with boots‖time‖salt IV (RFC 3826), msgFlags/securityParameters,
+  timeliness ±150 s.
+- **Crypto seam** (`src/usm/crypto.h` + `crypto_esp32.c` mbedtls backend;
+  host tests use the `tests/host/soft` reference).
+- **Oracle suite**: pysnmp 6.2.6 localkey + Python hmac/cryptography + a
+  self-checking BER encoder; vectors + wire samples in `tests/host/vec`.
+  Covers key localization, HMAC, CFB (incl. partial tail + chaining), and a
+  full authPriv GetRequest (MAC verify + decrypt + dispatch parse).
+- `tests/host/run_host_tests.sh` green: 2600+ checks, 0 failures; wired
+  into CI (`host-tests` job).
 
-Exit: host test suite green on bare PC; vectors match RFC + pysnmp.
+Exit: PASSED — host suite green on a bare PC with a C compiler only;
+vectors match RFC + pysnmp. Remaining on-device item: cross-check the
+mbedtls backend against `crypto_soft` on real silicon (deferred to M2 per
+maintainer — hardware access lands later).
 
 ## M2 — Agent engine
 - UDP :161 pump (non-blocking), discovery reports, dispatch

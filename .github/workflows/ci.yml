@@ -15,13 +15,11 @@ jobs:
           library-manager: update
           compliance: specification
 
-  # Host-side unit tests (no hardware, no Arduino SDK). Enabled when the
-  # ber/usm/mib modules land in M1 — see tests/host/README.md.
+  # Host-side unit tests (no hardware, no Arduino SDK) — BER codec + USM
+  # layer against generated RFC/pysnmp vectors.
   host-tests:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Run host test suite
-        run: |
-          echo "M0: test runner arrives with M1 (tests/host/run_host_tests.sh)"
-          ./tests/host/run_host_tests.sh 2>/dev/null || true
+        run: tests/host/run_host_tests.sh
