@@ -19,10 +19,13 @@
 
 // Opaque incremental SHA-256 state. Sized to fit both backends
 // (soft: 112 B, mbedtls 3.x context: < 160 B). Bump if a backend outgrows it.
+// The union guarantees 8-byte alignment for backends whose context embeds
+// 32/64-bit words (mbedtls) — a plain byte array would not.
 #define CRYPTO_SHA256_CTX_BYTES 192
 
-typedef struct {
-  uint8_t blob[CRYPTO_SHA256_CTX_BYTES];
+typedef union {
+  uint8_t  blob[CRYPTO_SHA256_CTX_BYTES];
+  uint64_t align_[CRYPTO_SHA256_CTX_BYTES / 8];
 } CryptoSha256Ctx;
 
 // Incremental SHA-256 (FIPS 180-4 / RFC 6234).

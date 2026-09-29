@@ -53,18 +53,18 @@ static void aes128_block(const uint8_t key[16], const uint8_t in[16],
                          uint8_t out[16], int mode) {
   mbedtls_aes_context ctx;
   mbedtls_aes_init(&ctx);
-  if (mode == 0) mbedtls_aes_setkey_enc(&ctx, key, 128);
-  else           mbedtls_aes_setkey_dec(&ctx, key, 128);
-  mbedtls_aes_crypt_ecb(&ctx, mode, in, out);  // mode: MBEDTLS_AES_ENCRYPT/DECRYPT
+  if (mode == MBEDTLS_AES_ENCRYPT) mbedtls_aes_setkey_enc(&ctx, key, 128);
+  else                             mbedtls_aes_setkey_dec(&ctx, key, 128);
+  mbedtls_aes_crypt_ecb(&ctx, mode, in, out);
   mbedtls_aes_free(&ctx);
 }
 
 void crypto_aes128_enc(const uint8_t key[16], const uint8_t in[16],
                        uint8_t out[16]) {
-  aes128_block(key, in, out, 0 /*MBEDTLS_AES_ENCRYPT*/);
+  aes128_block(key, in, out, MBEDTLS_AES_ENCRYPT);
 }
 
 void crypto_aes128_dec(const uint8_t key[16], const uint8_t in[16],
                        uint8_t out[16]) {
-  aes128_block(key, in, out, 1 /*MBEDTLS_AES_DECRYPT*/);
+  aes128_block(key, in, out, MBEDTLS_AES_DECRYPT);
 }
