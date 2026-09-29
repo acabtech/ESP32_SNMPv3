@@ -33,7 +33,7 @@ jobs:
         run: |
           arduino-cli core update-index
           arduino-cli core install esp32:esp32
-          arduino-cli lib install "DHT sensor library by Adafruit"
+          arduino-cli lib install "DHT sensor library"   # Adafruit; deps auto-resolved (Adafruit Unified Sensor)
 
       # SHA-pinned 2026-09-29: the upstream repo has no version tags (the
       # floating @v1 ref does not resolve and fails the job at 'Set up job').
