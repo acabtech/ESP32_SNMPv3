@@ -1,4 +1,4 @@
-// store_esp32.c — NVS-backed AgentStore for the ESP32 family (M2).
+// store_esp32.cpp — NVS-backed AgentStore for the ESP32 family (M2).
 //
 // Uses the Arduino-ESP32 Preferences wrapper around NVS (littlefs-free,
 // wear-leveled). The "snmpv3" namespace holds:
@@ -57,7 +57,9 @@ static bool store_save_engineid_esp32(const uint8_t* id, size_t len) {
   return ok;
 }
 
-const AgentStore SNMPV3_ESP_STORE = {
+// extern: as a C++ TU the const global would otherwise default to internal
+// linkage and never satisfy SnmpV3Agent.cpp's extern declaration.
+extern const AgentStore SNMPV3_ESP_STORE = {
     .loadBoots = store_load_boots_esp32,
     .saveBoots = store_save_boots_esp32,
     .loadEngineId = store_load_engineid_esp32,

@@ -4,6 +4,17 @@ All notable changes to ESP32-SNMPv3-Agent. Format: Keep a Changelog 1.1.
 
 ## [Unreleased] — 0.1.0
 
+### Added (M2 — agent engine, this rev)
+- `src/agent/AgentCore.c`: request gate + dispatch — discovery reports, and
+  Get/GetNext/GetBulk/Set with RFC 3412 error/exception OIDs.
+- MIB tree (`src/mib/MIB.c`): SNMPv2-MIB + SNMPv3-MIB subsets, app OIDs,
+  lexicographic instance ordering (`mibArcCmp`).
+- NVS persistence (`src/usm/store.h` + `store_esp32.cpp`): snmpEngineBoots
+  and the engineID override survive reboots via the ESP32 `Preferences`
+  wrapper (RFC 3414 §2.3).
+- `tests/host`: agent + store suites (boot counter, engineID round-trip,
+  dispatch error paths).
+
 ### Added (M1 — BER codec + USM core, host-tested)
 - `src/ber/BER.c`: full codec (lengths, INTEGER, OID, varbinds, PDU,
   scopedPDU, v3 message envelope) — bounds-checked encode + decode.
@@ -38,3 +49,12 @@ All notable changes to ESP32-SNMPv3-Agent. Format: Keep a Changelog 1.1.
 - SNMPv3 only, agent role only, USM authPriv only (HMAC-SHA-256 + AES-128).
 - engineBoots/engineTime persisted via NVS; replay msgID cache; RFC 3414
   discovery report exchange.
+
+### Fixed (this rev — CI compile gate + warnings)
+- `src/usm/store_esp32.c` → `store_esp32.cpp`: the NVS store uses the C++
+  `Preferences` API and failed the ESP-side compile gate as C
+  (`Preferences.h: error: unknown type name 'class'`). Renamed so the
+  Arduino build compiles it as C++ (linkage stays `extern "C"` via store.h).
+- `src/mib/MIB.c`: removed unused `properPrefix` (`-Wunused-function`).
+- `src/SnmpV3Agent.cpp`: `WiFiUDP::flush()` → `clear()` (deprecated in
+  arduino-esp32 v3.x).

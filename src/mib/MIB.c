@@ -81,13 +81,6 @@ int mibArcCmp(const uint32_t* a, size_t an,
   return an < bn ? -1 : 1;
 }
 
-static bool properPrefix(const uint32_t* a, size_t an,
-                         const uint32_t* b, size_t bn) {
-  if (an >= bn) return false;
-  for (size_t i = 0; i < an; i++) if (a[i] != b[i]) return false;
-  return true;
-}
-
 static int leafCmp(const void* pa, const void* pb) {
   const MibLeaf* a = (const MibLeaf*)pa;
   const MibLeaf* b = (const MibLeaf*)pb;

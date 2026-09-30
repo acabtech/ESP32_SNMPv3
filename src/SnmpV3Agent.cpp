@@ -3,7 +3,7 @@
 // Owns everything hardware-adjacent:
 //   • UDP :161 socket (WiFiUDP, non-blocking pump)
 //   • engine ID (MAC-derived, RFC 3411 §4 local format; override supported)
-//   • NVS persistence of snmpEngineBoots (store_esp32.c)
+//   • NVS persistence of snmpEngineBoots (store_esp32.cpp)
 //   • key localization at addUser() time
 // All protocol logic lives in the host-tested core:
 //   src/agent/AgentCore.c (request gate + dispatch), src/mib/MIB.c,
@@ -24,7 +24,7 @@
 #include <WiFiUdp.h>
 #include <esp_mac.h>
 
-extern const AgentStore SNMPV3_ESP_STORE;   // store_esp32.c
+extern const AgentStore SNMPV3_ESP_STORE;   // store_esp32.cpp
 static const AgentStore* s_store = &SNMPV3_ESP_STORE;
 #else
 // Host builds of this translation unit (none today — the host suite links
@@ -152,7 +152,7 @@ void SnmpV3Agent::loop() {
       }
       // AGENT_NO_RESPONSE / AGENT_ERR_DROP: silence (RFC 3412 reportable=0)
     }
-    s_udp.flush();
+    s_udp.clear();
   }
 #endif
 }

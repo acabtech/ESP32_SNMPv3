@@ -4,7 +4,7 @@
 // snmpEngineBoots is persistent; losing it would let clock skew break
 // timeliness windows). This header is the only persistence contract the
 // host-testable core sees, so tests can inject a RAM store while the ESP32
-// build wires it to NVS (store_esp32.c).
+// build wires it to NVS (store_esp32.cpp).
 //
 // SPDX-License-Identifier: GPL-3.0
 #ifndef SNMPV3_STORE_H

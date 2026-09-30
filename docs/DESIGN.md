@@ -1,7 +1,9 @@
 # Design — ESP32-SNMPv3-Agent
 
-Status: **M0 scaffold**. Interfaces below are drafting ground; the numbered
-"scope lock" reflects decisions approved by the maintainer (2026-09-29).
+Status: **M0..M2 landed** (scaffold; codec/USM core host-tested; agent engine
++ NVS persistence in this rev). Interfaces below are the v0.1 contract; the
+numbered "scope lock" reflects decisions approved by the maintainer
+(2026-09-29).
 
 ## 1. Scope lock (v0.1)
 

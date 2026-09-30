@@ -1,16 +1,17 @@
 # src/ — ESP32-SNMPv3-Agent library source
 
-Module layout (M0 scaffold — interfaces are drafted, implementations land
-per docs/ROADMAP.md):
+Module layout — M0/M1 core landed (host-tested), M2 agent engine + NVS store
+in this rev; see docs/ROADMAP.md for exit status:
 
 | Path            | Responsibility                                      |
 |-----------------|-----------------------------------------------------|
 | `SnmpV3Agent.h` | Public API (final for v0.1) + Arduino-style singleton. |
-| `SnmpV3Agent.cpp` | Agent state machine, UDP transport, dispatch (stub). |
+| `SnmpV3Agent.cpp` | Agent state machine, UDP :161 pump, dispatch, NVS-backed store wiring. |
 | `ber/BER.h`     | ASN.1 BER codec primitives (host-compilable).       |
 | `usm/USM.h`     | RFC 3414/7860/3826: keys, HMAC-SHA-256, AES-128-CFB, timeliness. |
 | `usm/crypto.h`  | Crypto seam: SHA-256 + AES-128 block primitives.      |
 | `usm/crypto_esp32.c` | mbedtls/HW-accelerated backend (device-only; host tests link `tests/host/soft` instead). |
+| `usm/store.h` + `usm/store_esp32.cpp` | NVS persistence seam: snmpEngineBoots + engineID override via ESP32 `Preferences` (C++ — compiled as `.cpp`; host tests inject a RAM store). |
 | `mib/MIB.h`     | Managed-object tree (scalars, RW scalars, tables).   |
 
 Design constraints (see docs/DESIGN.md):

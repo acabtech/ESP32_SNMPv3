@@ -3,7 +3,7 @@
 SNMPv3 (**USM, authPriv**) agent for **ESP32 / ESP32-S2 / ESP32-S3** sensor
 telemetry over Wi-Fi. v3-only, hardware-accelerated security, GPL-3.0.
 
-![CI](https://img.shields.io/github/actions/workflow/status/alatcerdas/esp32-snmpv3-agent/ci.yml?label=lint%2Ftests)
+![CI](https://img.shields.io/github/actions/workflow/status/acabtech/esp32-snmpv3-agent/ci.yml?label=lint%2Ftests)
 ![License](https://img.shields.io/badge/license-GPL--3.0-blue)
 
 ## What it does
@@ -28,13 +28,14 @@ scope lock, and `docs/SNMPV3-BACKGROUND.md` for the protocol primer.
 
 | Milestone | Content | State |
 |-----------|---------|-------|
-| M0 | Repo scaffold, API surface, CI (lint), interop runbooks | ✅ this rev |
-| M1 | BER codec + USM keys/crypto core (host-tested vs RFC vectors) | ⏳ next |
-| M2 | Agent engine: dispatch, MIB tree, Get/GetNext/GetBulk/Set | ⏳ |
-| M3 | v3 traps + informs, NVS engine state | ⏳ |
+| M0 | Repo scaffold, API surface, CI (lint), interop runbooks | ✅ |
+| M1 | BER codec + USM keys/crypto core (host-tested vs RFC vectors) | ✅ |
+| M2 | Agent engine: dispatch, MIB tree, Get/GetNext/GetBulk/Set; NVS engine state (boots/engineID via `store_esp32.cpp`) | ✅ this rev |
+| M3 | v3 traps + informs, on-device soak | ⏳ next |
 | M4 | Zabbix + Home Assistant integration proof, registry submission | ⏳ |
 
-Roadmap & exit criteria: [`docs/ROADMAP.md`](docs/ROADMAP.md).
+M2 code is complete this rev; the real-board net-snmp walk (ROADMAP M2 exit)
+lands with the M3 soak. Roadmap & exit criteria: [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ## Getting started
 

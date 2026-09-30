@@ -2,9 +2,8 @@ name: Compile Examples
 
 # Compiles every example in examples/ for the three supported FQBNs on every
 # push/PR — arduino-cli builds ALL of src/ (BER.c, USM.c, crypto_esp32.c incl.
-# mbedtls), so this is the ESP-side compile gate for the whole library core.
-# Examples still compile against the M0 agent stub; the stub's begin() returns
-# false at runtime until M2 wires the real agent (runtime checks are M2+).
+# mbedtls, and store_esp32.cpp against the ESP32 Preferences/NVS store), so
+# this is the ESP-side compile gate for the whole library core (M0..M2).
 on:
   push:
     branches: [main]

@@ -1,6 +1,8 @@
 # Roadmap
 
-Milestones with exit criteria. Current position: **M1 core done** (2026-09-29).
+Milestones with exit criteria. Current position: **M2 code landed**
+(2026-09-30, `store_esp32.cpp` NVS store; on-device net-snmp exit pending,
+see below).
 
 ## M0 — Scaffold (✅)
 - Repo structure per Arduino library spec, `library.properties`, GPL-3.0
