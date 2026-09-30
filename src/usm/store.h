@@ -28,6 +28,15 @@ typedef struct {
   // agent still runs (with an unreliable RFC timeliness story) but state()
   // reports the degraded condition.
   bool (*saveBoots)(uint32_t boots);
+
+  // Load a persisted engineID override (RFC 3411 §4). Return false when no
+  // override is stored (the agent then derives one from the MAC) or when the
+  // buffer is too small. On success *outLen is set to the stored length.
+  bool (*loadEngineId)(uint8_t* out, size_t cap, size_t* outLen);
+  // Persist an engineID override. Called once at begin() when the sketch
+  // supplied one via setEngineId(), so the identity (and therefore all
+  // localized keys) survives reboots. Return false to signal a failing store.
+  bool (*saveEngineId)(const uint8_t* id, size_t len);
 } AgentStore;
 
 #ifdef __cplusplus

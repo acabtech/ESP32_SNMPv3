@@ -33,7 +33,7 @@ extern "C" {
 
 #define AGENT_MAX_USERS     4
 #define AGENT_NAME_MAX      32
-#define AGENT_REPLAY_CACHE  16
+#define AGENT_REPLAY_CACHE  32   // docs/DESIGN.md: 32-entry msgID ring
 #define AGENT_MAX_MSG       1500   // our msgMaxSize (UDP datagram budget)
 
 typedef struct {

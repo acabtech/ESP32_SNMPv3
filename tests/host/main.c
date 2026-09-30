@@ -11,6 +11,7 @@ int test_ber(void);
 int test_usm(void);
 int test_mib(void);
 int test_agent(void);
+int test_store(void);
 
 int main(void) {
   int fails = 0;
@@ -19,6 +20,7 @@ int main(void) {
   fails += test_usm();
   fails += test_mib();
   fails += test_agent();
+  fails += test_store();
   if (fails == 0) {
     printf("\nALL HOST TESTS PASSED\n");
     return 0;

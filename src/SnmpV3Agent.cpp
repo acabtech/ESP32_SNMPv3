@@ -89,8 +89,14 @@ bool SnmpV3Agent::begin(uint16_t agentPort) {
   uint8_t engineId[32];
   size_t engineIdLen = 0;
   if (s_engineIdOverrideLen != 0) {
+    // Explicit override this session: use it and persist it so the identity
+    // (and all localized keys) survives the next reboot (docs/DESIGN.md).
     memcpy(engineId, s_engineIdOverride, s_engineIdOverrideLen);
     engineIdLen = s_engineIdOverrideLen;
+    if (s_store->saveEngineId) s_store->saveEngineId(engineId, engineIdLen);
+  } else if (s_store->loadEngineId &&
+             s_store->loadEngineId(engineId, sizeof engineId, &engineIdLen)) {
+    // A persisted override from a previous boot — reuse it unchanged.
   } else if (!deriveEngineIdFromMac(engineId, &engineIdLen)) {
     // no MAC source (e.g., host build) — refuse rather than run unidentifiable
     return false;

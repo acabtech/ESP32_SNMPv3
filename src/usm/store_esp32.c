@@ -2,8 +2,11 @@
 //
 // Uses the Arduino-ESP32 Preferences wrapper around NVS (littlefs-free,
 // wear-leveled). The "snmpv3" namespace holds:
-//   boots (u32) — RFC 3414 §2.3: must survive power cycles; incremented
-//                 exactly once per boot by the agent core.
+//   boots (u32)     — RFC 3414 §2.3: must survive power cycles; incremented
+//                      exactly once per boot by the agent core.
+//   engineId (bytes) — optional RFC 3411 §4 override (setEngineId); persisted
+//                      so the identity — and therefore all localized keys —
+//                      survives reboots (docs/DESIGN.md NVS layout).
 //
 // Compiled on every target by the Arduino library build; on non-ESP32
 // platforms the functions are compiled out (the host suite injects its own
@@ -33,9 +36,32 @@ static bool store_save_boots_esp32(uint32_t boots) {
   return ok;
 }
 
+static bool store_load_engineid_esp32(uint8_t* out, size_t cap, size_t* outLen) {
+  Preferences prefs;
+  if (!prefs.begin("snmpv3", true /* read-only */)) return false;
+  bool ok = prefs.isKey("engineId");
+  if (ok) {
+    size_t n = prefs.getBytes("engineId", out, cap);
+    if (n == 0 || n > cap) ok = false;   // empty / oversized -> treat as absent
+    else *outLen = n;
+  }
+  prefs.end();
+  return ok;
+}
+
+static bool store_save_engineid_esp32(const uint8_t* id, size_t len) {
+  Preferences prefs;
+  if (!prefs.begin("snmpv3", false /* read-write */)) return false;
+  bool ok = prefs.putBytes("engineId", id, len) == len;
+  prefs.end();
+  return ok;
+}
+
 const AgentStore SNMPV3_ESP_STORE = {
     .loadBoots = store_load_boots_esp32,
     .saveBoots = store_save_boots_esp32,
+    .loadEngineId = store_load_engineid_esp32,
+    .saveEngineId = store_save_engineid_esp32,
 };
 
 #else

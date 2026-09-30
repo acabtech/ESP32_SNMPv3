@@ -31,7 +31,7 @@ static bool app_set(int32_t v) { if (v > 1000) return false; g_appVal = v; retur
 static int32_t app2_get(void) { return 42; }
 static bool app2_set(int32_t v) { (void)v; return false; }   // always rejects
 
-void test_mib(void) {
+int test_mib(void) {
   printf("== MIB registry ==\n");
 
   // --- parse ---
@@ -162,4 +162,5 @@ void test_mib(void) {
   ok_(mibSet(t1, 9, &in) == MIB_SET_READ_ONLY, "table: not settable");
 
   printf("  %d checks, %d failures\n", checks, fails);
+  return fails;
 }

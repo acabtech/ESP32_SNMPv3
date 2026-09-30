@@ -67,8 +67,16 @@ static size_t makePdu(uint8_t* out, size_t cap, uint8_t tag, uint32_t reqId,
   memset(&vb, 0, sizeof vb);
   memcpy(vb.name, oid, oidLen * sizeof vb.name[0]);
   vb.nameLen = oidLen;
-  vb.valueTlv = valueTlv;
-  vb.valueLen = valueLen;
+  // A varbind must carry a value TLV; GET/GETNEXT requests use NULL.
+  uint8_t nullTlv[4];
+  if (valueTlv == NULL) {
+    int nt = berEncodeNull(nullTlv, sizeof nullTlv);
+    vb.valueTlv = nullTlv;
+    vb.valueLen = (size_t)nt;
+  } else {
+    vb.valueTlv = valueTlv;
+    vb.valueLen = valueLen;
+  }
   return (size_t)berEncodePdu(out, cap, tag, reqId, status, idx, &vb, 1);
 }
 
@@ -83,9 +91,15 @@ static size_t makeRequest(uint8_t* out, size_t cap,
                              (const uint8_t*)"", 0, pduTlv, pduLen);
   if (r < 0) return 0;
   size_t scopedLen = (size_t)r;
-  uint8_t iv[SNMPV3_AES_IV];
-  usmAesMakeIv(iv, boots, time, kSalt1);
-  if (usmAesCfbEncrypt(V_MSG_B_PRIVKEY, iv, scoped, ct, scopedLen) < 0) return 0;
+  // msgData: plaintext scopedPDU unless the priv flag is set (then encrypt).
+  const uint8_t* data = scoped;
+  size_t dataLen = scopedLen;
+  if (flags & 0x02) {
+    uint8_t iv[SNMPV3_AES_IV];
+    usmAesMakeIv(iv, boots, time, kSalt1);
+    if (usmAesCfbEncrypt(V_MSG_B_PRIVKEY, iv, scoped, ct, scopedLen) < 0) return 0;
+    data = ct;
+  }
 
   static const uint8_t zeroAuth[SNMPV3_SHA256_MAC] = {0};
   r = usmBuildSecurityParams(sec, sizeof sec, V_M2_ENGID, V_M2_ENGID_LEN,
@@ -93,7 +107,7 @@ static size_t makeRequest(uint8_t* out, size_t cap,
                              zeroAuth, kSalt1, &secLen);
   if (r < 0) return 0;
   r = berEncodeV3Message(out, cap, msgId, maxMsg, flags, 3, sec, secLen,
-                         ct, scopedLen);
+                         data, dataLen);
   if (r < 0) return 0;
   size_t msgLen = (size_t)r;
 
@@ -182,13 +196,17 @@ static int inspectResponse(const uint8_t* resp, size_t len,
   }
   *plainLen = bodyLen;
 
-  // scopedPDU -> PDU
+  // scopedPDU -> PDU; rebase value offsets to the full plaintext buffer so
+  // callers can read value octets as plain[decValueOff].
   size_t pos2 = 0, ceo, cel, cno, cnl, po, pl;
   if (berDecodeScopedPdu(plain, *plainLen, &pos2, &ceo, &cel, &cno, &cnl,
                          &po, &pl) < 0) return -1;
   pos2 = 0;
-  return berDecodePdu(plain + po, pl, &pos2, pduTag, reqId, status, idx,
-                      vbs, maxVbs, nvbs);
+  int rr = berDecodePdu(plain + po, pl, &pos2, pduTag, reqId, status, idx,
+                        vbs, maxVbs, nvbs);
+  if (rr < 0) return rr;
+  for (size_t i = 0; i < *nvbs; i++) vbs[i].decValueOff += po;
+  return rr;
 }
 
 static const uint32_t kSysNameOid[] = {1, 3, 6, 1, 2, 1, 1, 5, 0};
@@ -381,9 +399,13 @@ static void test_m2(void) {
           "uptime-GET: parses");
       ok_(nvbs == 1 && vbs[0].decValueTag == BER_TAG_TIMETICKS,
           "uptime-GET: TimeTicks tag");
-      uint32_t v = 0; size_t p = 0;
-      berDecodeUint32(plain + vbs[0].decValueOff, vbs[0].decValueLen, &p, &v);
-      ok_(v == 123456, "uptime-GET: value");
+      uint32_t v = 0;
+      if (vbs[0].decValueLen == 4)
+        v = ((uint32_t)plain[vbs[0].decValueOff] << 24) |
+            ((uint32_t)plain[vbs[0].decValueOff + 1] << 16) |
+            ((uint32_t)plain[vbs[0].decValueOff + 2] << 8) |
+            (uint32_t)plain[vbs[0].decValueOff + 3];
+      ok_(vbs[0].decValueLen == 4 && v == 123456, "uptime-GET: value");
     }
 
     // 9d) GetBulk: 0 non-repeaters, 25 repetitions from sysDescr parent
@@ -408,15 +430,19 @@ static void test_m2(void) {
       ok_(res == AGENT_RESPONSE && inspectResponse(s_out, n, &pduTag, &reqId,
           &status, &idx, vbs, 32, &nvbs, plain, &plainLen) == 0,
           "bulk: parses");
-      ok_(nvbs == 18, "bulk: 17 leaves + endOfMibView");
+      // The MIB holds the 17 system leaves plus the app scalars + table that
+      // test_mib registered earlier (shared static registry), so the walk is
+      // 17 sys + 3 app + 2 table rows + endOfMibView = 23 varbinds.
+      ok_(nvbs == 23, "bulk: 22 leaves + endOfMibView");
       ok_(nvbs >= 1 && vbs[0].nameLen == 9 &&
           vbs[0].name[7] == 1 && vbs[0].name[8] == 0,
           "bulk: first is sysDescr.0");
-      ok_(nvbs == 18 && vbs[17].decValueTag == BER_TAG_ENDOFMIBVIEW,
+      ok_(nvbs == 23 && vbs[22].decValueTag == BER_TAG_ENDOFMIBVIEW,
           "bulk: last is endOfMibView");
-      // stat leaves appear in order: names monotonic
+      // leaves appear in order: names monotonic (skip the trailing
+      // endOfMibView varbind, which echoes the last leaf's name)
       int mono = 1;
-      for (size_t i = 1; i < nvbs && mono; i++) {
+      for (size_t i = 1; i + 1 < nvbs && mono; i++) {
         mono = mibArcCmp(vbs[i - 1].name, vbs[i - 1].nameLen,
                          vbs[i].name, vbs[i].nameLen) < 0;
       }
@@ -529,21 +555,14 @@ static void test_m2(void) {
   }
 
   // 10) response to a noAuth request from a KNOWN user -> UnsupportedSecLevels
-  //     (build: authPriv request message but flags cleared to 0x04)
+  //     (build a genuinely noAuth request: plaintext scopedPDU, flags 0x04)
   {
     uint8_t pdu[200], req[700];
     const uint32_t kDesc[9] = {1, 3, 6, 1, 2, 1, 1, 1, 0};
     size_t pl = makePdu(pdu, sizeof pdu, BER_TAG_GET_REQ, 58, 0, 0,
                         kDesc, 9, NULL, 0);
-    size_t rl = makeRequest(req, sizeof req, 908, 65507, 0x07,
+    size_t rl = makeRequest(req, sizeof req, 908, 65507, 0x04,
                             V_M2_BOOTS, V_M2_REQ_TIME, "telemetry", pdu, pl);
-    // rewrite msgFlags byte + securityParams: set flags to 0x04 (noAuth) —
-    // secParams layout stays parseable (authParams/privParams stay zeros)
-    // msgFlags TLV: find it — envelope: 30 LL 02 01 03 02 03 mid 02 03 msize
-    // 04 01 flags ... — flags byte at a fixed offset for our builder: locate
-    // by walking: after version(3) + msgID(5) + maxSize(5) = offset 3+3+5+5
-    // = 16, then 04 01 <flags> → flags at 18.
-    req[18] = 0x04;
     size_t n = 0;
     int res = agentProcess(&s_agent, req, rl, V_M2_PROC_MS,
                            s_out, sizeof s_out, &n);
@@ -557,7 +576,7 @@ static void test_m2(void) {
     ok_(nvbs == 1 && vbs[0].nameLen == 11 &&
         memcmp(vbs[0].name, kStatsOid[0], 11 * sizeof(uint32_t)) == 0,
         "noAuth: UnsupportedSecLevels report");
-    ok_(reqId2 == 0, "noAuth: request-id 0 (body unreadable, RFC 3412)");
+    ok_(reqId2 == 58, "noAuth: request-id echoed (plaintext body readable)");
   }
 
   printf("  %d checks, %d failures\n", checks, fails);

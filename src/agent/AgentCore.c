@@ -349,17 +349,18 @@ static uint32_t setStatusFor(int mibResult) {
 }
 
 // Decode a varbind value TLV into a MibValue (SET support).
+// `off`/`len` point at the value CONTENT octets (the TLV was already split by
+// the varbind decoder), so INTEGER is decoded directly from those bytes.
 static int decodeMibValue(const uint8_t* in, size_t off, size_t len,
                           uint8_t tag, MibValue* out) {
   memset(out, 0, sizeof *out);
   switch (tag) {
     case BER_TAG_INTEGER: {
-      size_t pos = 0;
-      uint32_t v;
-      int r = berDecodeUint32(in + off, len, &pos, &v);
-      if (r < 0) return r;
+      if (len == 0 || len > 4) return BER_ERR_OVERFLOW;
+      int32_t v = (in[off] & 0x80) ? -1 : 0;   // sign-extend two's complement
+      for (size_t i = 0; i < len; i++) v = (int32_t)((v << 8) | in[off + i]);
       out->type = MIB_T_INT32;
-      out->u32 = v;
+      out->u32 = (uint32_t)v;
       return 0;
     }
     case BER_TAG_OCTET_STRING:
@@ -645,7 +646,8 @@ int agentProcess(AgentState* s, const uint8_t* in0, size_t inLen,
     // §4.2.5 lite: no undo — the failing agent state is documented).
     for (size_t i = 0; i < nvbs && errStatus == SNMP_ERR_NO_ERROR; i++) {
       MibValue inVal;
-      if (decodeMibValue(in, s_vbs[i].decValueOff, s_vbs[i].decValueLen,
+      // decValueOff is rebased to the decrypted plaintext (s_plain).
+      if (decodeMibValue(s_plain, s_vbs[i].decValueOff, s_vbs[i].decValueLen,
                          s_vbs[i].decValueTag, &inVal) < 0) {
         errStatus = SNMP_ERR_WRONG_TYPE;
         errIndex = (uint32_t)(i + 1);
@@ -690,7 +692,7 @@ int agentProcess(AgentState* s, const uint8_t* in0, size_t inLen,
   if (errStatus != SNMP_ERR_NO_ERROR && errStatus != SNMP_ERR_TOO_BIG) {
     nvbOut = 0;
     for (size_t i = 0; i < nvbs; i++) {
-      if (echoVarbind(&s_vbs[i], in, &s_outVbs[i],
+      if (echoVarbind(&s_vbs[i], s_plain, &s_outVbs[i],
                       s_vbValue[i], sizeof s_vbValue[i]) < 0) {
         return AGENT_ERR_DROP;
       }
@@ -729,7 +731,9 @@ int agentProcess(AgentState* s, const uint8_t* in0, size_t inLen,
   return AGENT_RESPONSE;
 }
 
-// decodeIncomingPdu: scopedPDU region -> PDU fields + varbinds
+// decodeIncomingPdu: scopedPDU region -> PDU fields + varbinds.
+// The varbind value offsets are rebased to the FULL plaintext buffer (the
+// caller's `plain`), so SET/echo can read value octets directly from it.
 static int decodeIncomingPdu(const uint8_t* plain, size_t plainLen,
                              uint8_t* pduTag, uint32_t* reqId,
                              uint32_t* status, uint32_t* idx,
@@ -739,6 +743,9 @@ static int decodeIncomingPdu(const uint8_t* plain, size_t plainLen,
                              &po, &pl);
   if (r < 0) return r;
   pos = 0;
-  return berDecodePdu(plain + po, pl, &pos, pduTag, reqId, status, idx,
-                      vbs, maxVbs, nvbs);
+  r = berDecodePdu(plain + po, pl, &pos, pduTag, reqId, status, idx,
+                   vbs, maxVbs, nvbs);
+  if (r < 0) return r;
+  for (size_t i = 0; i < *nvbs; i++) vbs[i].decValueOff += po;
+  return r;
 }
