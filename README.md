@@ -1,14 +1,20 @@
 # ESP32-SNMPv3-Agent
 
 SNMPv3 (**USM, authPriv**) agent for **ESP32 / ESP32-S2 / ESP32-S3** sensor
-telemetry over Wi-Fi. v3-only, hardware-accelerated security, GPL-3.0.
+telemetry over Wi-Fi. 
+
+Supports SNMPv3-only (no v1/v2c), hardware-accelerated security, GPL-3.0.
+
+If you need SNMP v1/v2c there are other alternative libraries to use:
+- https://github.com/0neblock/Arduino_SNMP
+- https://github.com/syntax1269/SNMP_Embedded
 
 ![CI](https://img.shields.io/github/actions/workflow/status/acabtech/esp32-snmpv3-agent/ci.yml?label=lint%2Ftests)
 ![License](https://img.shields.io/badge/license-GPL--3.0-blue)
 
 ## What it does
 
-The device becomes a managed SNMPv3 node:
+You can use this library to use your ESP32 as SMTPv3 node over Wi-Fi to collect sensor readings and make SNMP traps when pre-set thresholds are exceeded. 
 
 - **Managers poll it** (Zabbix, Home Assistant, PRTG, net-snmp…) with
   `Get` / `GetNext` / `GetBulk` / `Set` over UDP :161 — this is how sensor
@@ -18,11 +24,7 @@ The device becomes a managed SNMPv3 node:
 - **Security in every byte**: USM *authPriv only* — HMAC-SHA-256
   authentication (RFC 7860) + AES-128 CFB privacy (RFC 3826), using the
   ESP32 family **hardware-accelerated SHA-256 and AES engines** via
-  ESP-IDF's mbedtls layer. No plaintext community strings, ever.
-
-Deliberately, **v0.1 is SNMPv3-only** (no v1/v2c) — pick a community-string
-library if that's what a deployment needs. See `docs/DESIGN.md` for the full
-scope lock, and `docs/SNMPV3-BACKGROUND.md` for the protocol primer.
+  ESP-IDF's mbedtls layer.
 
 ## Status
 
@@ -30,12 +32,9 @@ scope lock, and `docs/SNMPV3-BACKGROUND.md` for the protocol primer.
 |-----------|---------|-------|
 | M0 | Repo scaffold, API surface, CI (lint), interop runbooks | ✅ |
 | M1 | BER codec + USM keys/crypto core (host-tested vs RFC vectors) | ✅ |
-| M2 | Agent engine: dispatch, MIB tree, Get/GetNext/GetBulk/Set; NVS engine state (boots/engineID via `store_esp32.cpp`) | ✅ this rev |
-| M3 | v3 traps + informs, on-device soak | ⏳ next |
+| M2 | Agent engine: dispatch, MIB tree, Get/GetNext/GetBulk/Set; NVS engine state | ✅ |
+| M3 | v3 traps + informs, on-device soak | ⏳ |
 | M4 | Zabbix + Home Assistant integration proof, registry submission | ⏳ |
-
-M2 code is complete this rev; the real-board net-snmp walk (ROADMAP M2 exit)
-lands with the M3 soak. Roadmap & exit criteria: [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ## Getting started
 
