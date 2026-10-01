@@ -13,10 +13,10 @@ Requirements (pysnmp 6.2.x — see tests/interop/README.md):
 Usage:
   /tmp/pv/bin/python pysnmp_check.py --host 192.168.100.50 --user telemetry \
       --auth-pass auth-passphrase --priv-pass priv-passphrase \
-      get 1.3.6.1.4.1.99999.1.1.0
-  ... walk 1.3.6.1.4.1.99999
-  ... bulk 1.3.6.1.4.1.99999 --max-repetitions 10
-  ... set 1.3.6.1.4.1.99999.1.2.0 42
+      get 1.3.6.1.4.1.67018.1.1.0
+  ... walk 1.3.6.1.4.1.67018
+  ... bulk 1.3.6.1.4.1.67018 --max-repetitions 10
+  ... set 1.3.6.1.4.1.67018.1.2.0 42
 
 Exit code 0 = success, 1 = SNMP error, 2 = usage/connect error.
 """

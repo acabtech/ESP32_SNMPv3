@@ -502,7 +502,7 @@ static void test_m2(void) {
 
     // 9g) SET unknown OID -> notWritable(17)
     {
-      const uint32_t kNo[] = {1, 3, 6, 1, 4, 1, 99999, 42, 0};
+      const uint32_t kNo[] = {1, 3, 6, 1, 4, 1, 67018, 42, 0};
       uint8_t valTlv[8];
       int vt = berEncodeInt32(valTlv, sizeof valTlv, 1);
       BerVarbind vb;

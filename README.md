@@ -53,7 +53,7 @@ You can use this library to use your ESP32 as SMTPv3 node over Wi-Fi to collect 
    ```bash
    snmpget -v3 -l authPriv -u telemetry -a SHA-256 -A auth-passphrase \
            -x AES -X priv-passphrase udp:192.168.1.50:161 \
-           1.3.6.1.4.1.99999.1.1.0
+           1.3.6.1.4.1.67018.1.1.0
    ```
 
 ### Hardware

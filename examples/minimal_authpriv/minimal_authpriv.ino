@@ -7,7 +7,7 @@
  *
  * Manager sanity check (net-snmp):
  *   snmpwalk -v3 -l authPriv -u smoke -a SHA-256 -A auth-passphrase \
- *            -x AES -X priv-passphrase udp:DEVICE_IP:161 1.3.6.1.4.1.99999
+ *            -x AES -X priv-passphrase udp:DEVICE_IP:161 1.3.6.1.4.1.67018
  *
  * GPL-3.0 — PT Alat Cerdas Adikarya Bersama, 2026.
  */
@@ -18,8 +18,8 @@
 #define WIFI_SSID "CHANGE_ME"
 #define WIFI_PASS "CHANGE_ME"
 
-#define OID_UPTIME  "1.3.6.1.4.1.99999.2.1.0"
-#define OID_FREEHEAP "1.3.6.1.4.1.99999.2.1.1"
+#define OID_UPTIME  "1.3.6.1.4.1.67018.2.1.0"
+#define OID_FREEHEAP "1.3.6.1.4.1.67018.2.1.1"
 
 int32_t getUptime()  { return (int32_t)(millis() / 1000); }
 int32_t getFreeHeap(){ return (int32_t)ESP.getFreeHeap(); }

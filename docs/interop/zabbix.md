@@ -41,13 +41,13 @@ Configuration → Hosts → `esp32-dht22` → **Items → Create item**:
 
 - **Name**: `Temperature`
 - **Type**: `SNMP agent`
-- **OID**: `1.3.6.1.4.1.99999.1.1.0`
+- **OID**: `1.3.6.1.4.1.67018.1.1.0`
 - **Type of information**: `Numeric (unsigned)`
 - **Units**: `C`
 - **Custom multipliers**: `0.1` in the value multiplier — readings are
   °C × 10 as integers.
 
-Repeat for humidity OID `1.3.6.1.4.1.99999.1.1.1`.
+Repeat for humidity OID `1.3.6.1.4.1.67018.1.1.1`.
 
 Then Graphs → create a graph with both items. Wait for the first poll cycle
 (default 30 s update) — you now have a live, authenticated, encrypted

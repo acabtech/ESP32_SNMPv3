@@ -175,10 +175,10 @@ static bool sysDescrGet(void* ctx, MibValue* v) {
 }
 
 static bool sysObjectIDGet(void* ctx, MibValue* v) {
-  // Placeholder enterprise root (1.3.6.1.4.1.99999.1) until the IANA PEN is
-  // assigned; this is the single point of change.
+  // PT Alat Cerdas enterprise root: enterprises.67018.1 (IANA PEN)
+  // = 1.3.6.1.4.1.67018.1
   (void)ctx;
-  static const uint32_t kRoot[] = {1, 3, 6, 1, 4, 1, 99999, 1};
+  static const uint32_t kRoot[] = {1, 3, 6, 1, 4, 1, 67018, 1};
   v->type = MIB_T_OID;
   memcpy(v->arcs, kRoot, sizeof kRoot);
   v->arcsLen = sizeof kRoot / sizeof kRoot[0];

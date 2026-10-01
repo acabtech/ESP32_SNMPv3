@@ -27,7 +27,7 @@
 #endif
 
 // --- OID helpers -----------------------------------------------------------
-// OIDs are registered as dotted strings, e.g. "1.3.6.1.4.1.99999.1.1.0".
+// OIDs are registered as dotted strings, e.g. "1.3.6.1.4.1.67018.1.1.0".
 // The library parses them once at registration into 32-bit arc vectors.
 
 // --- Public agent API ------------------------------------------------------

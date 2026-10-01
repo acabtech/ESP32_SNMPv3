@@ -299,7 +299,7 @@ def emit_vectors():
     scoped_plain = ber_seq(
         ber_octet(ENGINE_ID), ber_octet(b""),
         ber_pdu(0xA0, 42, 0, 0,
-                [ber_varbind((1, 3, 6, 1, 4, 1, 99999, 1, 1, 0), ber_null())]))
+                [ber_varbind((1, 3, 6, 1, 4, 1, 67018, 1, 1, 0), ber_null())]))
     cases = [
         (bytes(range(16)), 1234, 5678, b"\x00" * 7 + b"\x01", bytes.fromhex("c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedf")),
         (bytes(range(16)), 1234, 5678, b"\x00" * 7 + b"\x01", scoped_plain),

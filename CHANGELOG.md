@@ -4,6 +4,12 @@ All notable changes to ESP32-SNMPv3-Agent. Format: Keep a Changelog 1.1.
 
 ## [Unreleased] — 0.1.0
 
+### Changed
+- Example and app OIDs now live under the granted **IANA PEN 67018**
+  (`enterprises.67018` = `1.3.6.1.4.1.67018`, PT Alat Cerdas Adikarya
+  Bersama) — the placeholder enterprise number is gone from src, examples,
+  docs, and tests; the wire oracles were regenerated accordingly.
+
 ### Added (M2 — agent engine, this rev)
 - `src/agent/AgentCore.c`: request gate + dispatch — discovery reports, and
   Get/GetNext/GetBulk/Set with RFC 3412 error/exception OIDs.

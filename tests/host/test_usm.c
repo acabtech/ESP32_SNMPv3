@@ -210,7 +210,7 @@ static void test_msg_b_full(void) {
   r = berDecodePdu(plain, po + pl, &pos2, &pduTag, &rid, &st, &ix, vbs, 4, &nvbs);
   ok_(r == BER_OK && pduTag == BER_TAG_GET_REQ && rid == 42 && st == 0 && ix == 0
       && nvbs == 1, "MSG_B GetRequest fields");
-  uint32_t wantName[] = {1, 3, 6, 1, 4, 1, 99999, 1, 1, 0};
+  uint32_t wantName[] = {1, 3, 6, 1, 4, 1, 67018, 1, 1, 0};
   ok_(vbs[0].nameLen == 10 && memcmp(vbs[0].name, wantName, 10 * 4) == 0,
       "MSG_B varbind OID");
   ok_(vbs[0].decValueTag == BER_TAG_NULL, "MSG_B get varbind value NULL");

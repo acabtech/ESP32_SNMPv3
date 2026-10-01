@@ -24,7 +24,7 @@
 #define WIFI_PASS "CHANGE_ME"
 
 #define BTN_PIN   18
-#define OID_BTN   "1.3.6.1.4.1.99999.2.2.0"
+#define OID_BTN   "1.3.6.1.4.1.67018.2.2.0"
 
 // Manager that should receive v3 traps/informs (UDP :162).
 // Replace with the NMS IP on your network (e.g. your Zabbix or PC).

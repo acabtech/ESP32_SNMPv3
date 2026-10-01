@@ -19,7 +19,7 @@ facade is retained). The same venv drives
 
 A pysnmp `CommandResponder` configured with exactly one user
 (`telemetry` / `auth-passphrase` / `priv-passphrase`, SHA-256 + AES-128)
-that mimics the board's OIDs (`1.3.6.1.4.1.99999.*`). Purpose:
+that mimics the board's OIDs (`1.3.6.1.4.1.67018.*`). Purpose:
 
 - Validate the **Zabbix** and **Home Assistant** runbooks **before any
   hardware exists** — if the config works against the mock, it works

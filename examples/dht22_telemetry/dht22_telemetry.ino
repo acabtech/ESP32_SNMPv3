@@ -11,7 +11,7 @@
  *   net-snmp:
  *     snmpget -v3 -l authPriv -u telemetry -a SHA-256 -A auth-passphrase \
  *             -x AES -X priv-passphrase udp:DEVICE_IP:161 \
- *             1.3.6.1.4.1.99999.1.1.0
+ *             1.3.6.1.4.1.67018.1.1.0
  *
  *   Zabbix:  Host → SNMP interface → "Use SNMPv3" →
  *            security level: auth+priv, auth protocol SHA-256,
@@ -29,11 +29,10 @@
  *         priv_protocol: aes
  *         accept_errors: true
  *         scan_interval: 30
- *         oid: 1.3.6.1.4.1.99999.1.1.0  # degrees C * 10
+ *         oid: 1.3.6.1.4.1.67018.1.1.0  # degrees C * 10
  *
- * NOTE: OIDs below use placeholder enterprise 99999 under the enterprises
- * subtree (1.3.6.1.4.1). Before shipping a product, PT Alat Cerdas Adikarya Bersama should
- * request a private enterprise number (IANA PEN) and re-prefix the OIDs.
+ * NOTE: OIDs below live under our IANA PEN (enterprises.67018 =
+ * 1.3.6.1.4.1.67018, PT Alat Cerdas Adikarya Bersama).
  *
  * GPL-3.0 — PT Alat Cerdas Adikarya Bersama, 2026.
  */
@@ -49,11 +48,11 @@
 DHT dht(DHT_PIN, DHT22);
 
 // --- OID layout ------------------------------------------------------------
-// enterprises.alatcerdas.example = 1.3.6.1.4.1.99999 (placeholder)
+// enterprises.alatcerdas.example = 1.3.6.1.4.1.67018 (IANA PEN)
 //   .1.1.0  sensorTemperature  (degrees C * 10, signed)
 //   .1.1.1  sensorHumidity     (% RH * 10, signed)
-#define OID_TEMP "1.3.6.1.4.1.99999.1.1.0"
-#define OID_HUM  "1.3.6.1.4.1.99999.1.1.1"
+#define OID_TEMP "1.3.6.1.4.1.67018.1.1.0"
+#define OID_HUM  "1.3.6.1.4.1.67018.1.1.1"
 
 // --- Cached readings (DHT22 needs >= 2 s between reads; getters must be
 // --- cheap and non-blocking, so the loop() below refreshes the cache).

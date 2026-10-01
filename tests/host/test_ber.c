@@ -104,12 +104,13 @@ static void test_oid(void) {
     from_hex(want, "06092b060106030a010105");
     expect_bytes(got, (size_t)n, want, 11, "OID usmHMAC192SHA256 known bytes");
   }
-  // 1.3.6.1.4.1.99999.1.1.0 — exercises a 3-octet subidentifier (99999)
+  // 1.3.6.1.4.1.67018.1.1.0 — exercises a 3-octet subidentifier (67018,
+  // PT Alat Cerdas IANA PEN)
   {
-    uint32_t arcs[] = {1, 3, 6, 1, 4, 1, 99999, 1, 1, 0};
+    uint32_t arcs[] = {1, 3, 6, 1, 4, 1, 67018, 1, 1, 0};
     int n = berEncodeOid(got, sizeof got, arcs, 10);
-    from_hex(want, "060b2b06010401868d1f010100");
-    expect_bytes(got, (size_t)n, want, 13, "OID with 99999 subid known bytes");
+    from_hex(want, "060b2b06010401848b4a010100");
+    expect_bytes(got, (size_t)n, want, 13, "OID with 67018 subid known bytes");
   }
   // roundtrip fuzz incl. large arcs
   for (int i = 0; i < 500; i++) {
@@ -133,7 +134,7 @@ static void test_oid(void) {
 static void test_structs(void) {
   uint8_t buf[512];
   // varbind: name + INTEGER 42
-  uint32_t nm[] = {1, 3, 6, 1, 4, 1, 99999, 1, 1, 0};
+  uint32_t nm[] = {1, 3, 6, 1, 4, 1, 67018, 1, 1, 0};
   uint8_t val42[8]; int vn = berEncodeInt32(val42, sizeof val42, 42);
   int n = berEncodeVarbind(buf, sizeof buf, nm, 10, val42, (size_t)vn);
   ok_(n > 0, "varbind encode");

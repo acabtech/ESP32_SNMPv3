@@ -88,9 +88,8 @@ sub-millisecond on the hardware engines, non-blocking in `loop()`.
 
 ## 4. Open items
 
-- [x] **IANA PEN** — application filed (in progress); OID root below
-      `enterprises.<PEN>` to be swapped in when granted. Not highlighted in
-      code per maintainer direction.
+- [x] **IANA PEN 67018** — granted; example/enterprise OID root is
+      `enterprises.67018` = `1.3.6.1.4.1.67018` throughout the codebase.
 - [x] GPL **`only`** confirmed (SPDX `GPL-3.0`).
 - [x] pysnmp oracle pinned to **6.2.6** (SHA-2 auth protocol via
       `pysnmp.proto.secmod.rfc7860`; hlapi sync facade retained).

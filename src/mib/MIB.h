@@ -5,7 +5,7 @@
 //     match = binary search; GetNext = first strictly-greater instance,
 //     arc-wise with the standard "shorter prefix sorts first" rule).
 //   • Every registered OID string names the SERVED INSTANCE (the sketch's
-//     convention is scalars at ".0", e.g. "1.3.6.1.4.1.99999.1.1.0").
+//     convention is scalars at ".0", e.g. "1.3.6.1.4.1.67018.1.1.0").
 //   • Values are typed (Integer32 / Unsigned32 / TimeTicks / Counter32 /
 //     OctetString / OID) — SNMPv2-SMI application types are encoded with
 //     their proper BER tags by the agent core.
@@ -52,7 +52,7 @@ typedef bool (*MibGetFn)(void* ctx, MibValue* out);      // fill *out
 typedef bool (*MibSetFn)(void* ctx, const MibValue* in); // validate + apply
 
 // --- Registration -----------------------------------------------------------
-// Parse a dotted OID string ("1.3.6.1.4.1.99999.1.1.0") into an arc vector.
+// Parse a dotted OID string ("1.3.6.1.4.1.67018.1.1.0") into an arc vector.
 // Returns arc count, or -1 on malformed input / overflow.
 int mibParseOid(const char* dotted, uint32_t* arcs, size_t cap);
 

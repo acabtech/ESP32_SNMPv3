@@ -23,7 +23,7 @@ sensor:
     priv_key: priv-passphrase
     auth_protocol: sha256      # md5 | sha | sha224 | sha256 | sha384 | sha512
     priv_protocol: aes         # des | aes
-    oid: 1.3.6.1.4.1.99999.1.1.0
+    oid: 1.3.6.1.4.1.67018.1.1.0
     accept_errors: true        # agent may answer Report() while re-syncing
     unit_of_measurement: "°C"
     value_template: "{{ value | float | multiply(0.1) | round(1) }}"
@@ -39,7 +39,7 @@ sensor:
     priv_key: priv-passphrase
     auth_protocol: sha256
     priv_protocol: aes
-    oid: 1.3.6.1.4.1.99999.1.1.1
+    oid: 1.3.6.1.4.1.67018.1.1.1
     accept_errors: true
     unit_of_measurement: "%"
     value_template: "{{ value | float | multiply(0.1) | round(1) }}"

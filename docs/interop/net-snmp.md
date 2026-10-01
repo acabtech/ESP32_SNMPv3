@@ -23,11 +23,11 @@ defPrivPassphrase priv-passphrase
 ```bash
 snmpget    -v3 -l authPriv -u telemetry -a SHA-256 -A auth-passphrase \
            -x AES -X priv-passphrase udp:192.168.100.50:161 \
-           1.3.6.1.4.1.99999.1.1.0
+           1.3.6.1.4.1.67018.1.1.0
 
 snmpwalk   -v3 -l authPriv -u telemetry -a SHA-256 -A auth-passphrase \
            -x AES -X priv-passphrase udp:192.168.100.50:161 \
-           1.3.6.1.4.1.99999
+           1.3.6.1.4.1.67018
 
 snmpgetnext / snmpgetbulk (replace snmpget with snmpgetnext / snmpgetbulk -C r10 ...)
 
@@ -41,7 +41,7 @@ snmpget -v3 -l authNoPriv -u telemetry -a SHA-256 -A auth-passphrase \
 ```bash
 snmpset -v3 -l authPriv -u telemetry -a SHA-256 -A auth-passphrase \
         -x AES -X priv-passphrase udp:192.168.100.50:161 \
-        1.3.6.1.4.1.99999.1.2.0 i 42
+        1.3.6.1.4.1.67018.1.2.0 i 42
 ```
 
 ## Traps (M3; test the agent's notification path)
@@ -55,7 +55,7 @@ disableAuthorization yes
 snmptrapd -f -Lo
 
 # press the button on the trap_notification example — expect a line like:
-#   TRAP ... UDP: [192.168.100.50]:162 ... 1.3.6.1.4.1.99999.2.2.0
+#   TRAP ... UDP: [192.168.100.50]:162 ... 1.3.6.1.4.1.67018.2.2.0
 ```
 
 ## Troubleshooting
