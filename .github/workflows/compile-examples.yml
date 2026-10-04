@@ -24,6 +24,10 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: arduino/setup-arduino-cli@v2
+        with:
+          # Gitea injects a Gitea token as github.token; GitHub API rejects it.
+          # Pass the real GitHub token (stored as Actions secret GH_TOKEN).
+          token: ${{ secrets.GH_TOKEN }}
 
       - name: Free disk space (runner bloat vs. the ~10 GB ESP32 toolchain set)
         run: |

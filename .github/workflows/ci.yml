@@ -12,6 +12,9 @@ jobs:
       - name: arduino-lint (Arduino Library specification compliance)
         uses: arduino/arduino-lint-action@v2
         with:
+          # Gitea injects a Gitea token as github.token; GitHub API rejects it.
+          # Pass the real GitHub token (stored as Actions secret GH_TOKEN).
+          token: ${{ secrets.GH_TOKEN }}
           library-manager: false   # not yet in the Library Manager index (M3);
                                    # 'update' mode would false-positive LP018
           compliance: specification
