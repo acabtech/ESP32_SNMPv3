@@ -176,7 +176,9 @@ def ber_varbind(oid_arcs, val: bytes) -> bytes:
     return tlv(0x30, ber_oid(oid_arcs) + val)
 
 def ber_pdu(tag: int, req: int, status: int, idx: int, vbs: list) -> bytes:
-    return tlv(tag, ber_int(req) + ber_int(status) + ber_int(idx) + b"".join(vbs))
+    # RFC 3416 §3: PDU includes a VarBindList ::= SEQUENCE OF VarBind wrapper.
+    vblist = tlv(0x30, b"".join(vbs))
+    return tlv(tag, ber_int(req) + ber_int(status) + ber_int(idx) + vblist)
 
 def ber_seq(*parts) -> bytes:
     return tlv(0x30, b"".join(parts))
@@ -326,14 +328,18 @@ def emit_vectors():
         return ber_seq(ber_octet(engine_id), ber_int(boots), ber_int(time),
                        ber_octet(user), ber_octet(auth), ber_octet(priv))
 
+    def header(msg_id, max_size, flags):
+        # msgGlobalData ::= HeaderData (RFC 3412 §6) — a nested SEQUENCE.
+        return ber_seq(ber_int(msg_id) + ber_int(max_size)
+                       + ber_octet(bytes([flags])) + ber_int(3))
+
     def message(engine_id, boots, time, user, auth, priv, msg_id, max_size,
                 flags, scoped, encrypted=False):
         sp = secparams(engine_id, boots, time, user, auth, priv)
         # RFC 3412 §6: privFlag set -> msgData ::= OCTET STRING (ciphertext);
         # otherwise msgData ::= scopedPDU in plaintext.
         msg_data = ber_octet(scoped) if encrypted else scoped
-        body = (ber_int(3) + ber_int(msg_id) + ber_int(max_size)
-                + ber_octet(bytes([flags])) + ber_int(3) + ber_octet(sp))
+        body = ber_int(3) + header(msg_id, max_size, flags) + ber_octet(sp)
         return ber_seq(body + msg_data), sp
 
     # A: discovery report — unauthenticated, engine params embedded
@@ -345,8 +351,7 @@ def emit_vectors():
     # self-check: outer SEQUENCE decodes cleanly and re-encodes identically
     tag, content, nxt = mini_decode(msg_a)
     assert tag == 0x30 and nxt == len(msg_a)
-    rebuilt = ber_seq(ber_int(3) + ber_int(0x11223344) + ber_int(484)
-                      + ber_octet(bytes([0x04])) + ber_int(3)
+    rebuilt = ber_seq(ber_int(3) + header(0x11223344, 484, 0x04)
                       + ber_octet(sp_a) + scoped_a)
     assert msg_a == rebuilt, "msg A re-encode mismatch"
 
@@ -379,13 +384,12 @@ def emit_vectors():
     tag, content, nxt = mini_decode(msg_b)
     assert tag == 0x30 and nxt == len(msg_b)
     p = 0
-    for _ in range(6):  # version, msgID, maxSize, flags, secModel, secParams
+    for _ in range(3):  # version, HeaderData, secParams
         _, _, p = mini_decode(content, p)
     mtag, mcontent, mnxt = mini_decode(content, p)
     assert mtag == 0x04 and mcontent == encrypted and mnxt == len(content), \
         "msg B msgData TLV mismatch"
-    rebuilt = ber_seq(ber_int(3) + ber_int(98765) + ber_int(65507)
-                      + ber_octet(bytes([0x07])) + ber_int(3)
+    rebuilt = ber_seq(ber_int(3) + header(98765, 65507, 0x07)
                       + ber_octet(sp_b) + ber_octet(encrypted))
     assert msg_b == rebuilt, "msg B re-encode mismatch"
     print(f"    msg B self-check OK ({len(msg_b)} bytes, ct {len(encrypted)} B)")
@@ -415,8 +419,7 @@ def emit_vectors():
                       auth_key, priv_key16, salt, boots, time):
         iv = boots.to_bytes(4, "big") + time.to_bytes(4, "big") + salt
         ct = cfb128(priv_key16, iv, scoped_plain)
-        body = (ber_int(3) + ber_int(msg_id) + ber_int(max_size)
-                + ber_octet(bytes([flags])) + ber_int(3) + ber_octet(sp))
+        body = ber_int(3) + header(msg_id, max_size, flags) + ber_octet(sp)
         msg = ber_seq(body + ber_octet(ct))
         marker = b"\xaa" * 24
         sp_marked = sp.replace(ber_octet(marker) if False else sp[:0], b"")
@@ -432,8 +435,7 @@ def emit_vectors():
         marker = b"\xaa" * 24
         sp = ber_seq(ber_octet(engine_id), ber_int(boots), ber_int(time),
                      ber_octet(user), ber_octet(marker), ber_octet(salt))
-        body = (ber_int(3) + ber_int(msg_id) + ber_int(max_size)
-                + ber_octet(bytes([0x07])) + ber_int(3) + ber_octet(sp))
+        body = ber_int(3) + header(msg_id, max_size, 0x07) + ber_octet(sp)
         msg = ber_seq(body + ber_octet(ct))
         zeroed = msg.replace(marker, b"\x00" * 24, 1)
         mac = hmac_mod.new(auth_key, zeroed, hashlib.sha256).digest()[:24]
@@ -450,8 +452,7 @@ def emit_vectors():
         marker = b"\xaa" * 24
         sp = ber_seq(ber_octet(engine_id), ber_int(boots), ber_int(time),
                      ber_octet(user), ber_octet(marker), ber_octet(salt))
-        body = (ber_int(3) + ber_int(req_msg_id) + ber_int(max_size)
-                + ber_octet(bytes([0x03])) + ber_int(3) + ber_octet(sp))
+        body = ber_int(3) + header(req_msg_id, max_size, 0x03) + ber_octet(sp)
         msg = ber_seq(body + ber_octet(ct))
         zeroed = msg.replace(marker, b"\x00" * 24, 1)
         mac = hmac_mod.new(auth_key, zeroed, hashlib.sha256).digest()[:24]
@@ -466,8 +467,7 @@ def emit_vectors():
         sp = ber_seq(ber_octet(engine_id), ber_int(boots), ber_int(time),
                      ber_octet(b""), ber_octet(b"\x00" * 24),
                      ber_octet(b"\x00" * 8))
-        body = (ber_int(3) + ber_int(req_msg_id) + ber_int(max_size)
-                + ber_octet(bytes([0x04])) + ber_int(3) + ber_octet(sp))
+        body = ber_int(3) + header(req_msg_id, max_size, 0x04) + ber_octet(sp)
         return ber_seq(body + scoped)
 
     # Scenario constants (must match test_agent.c).
@@ -495,15 +495,14 @@ def emit_vectors():
 
     # 2) discovery (noAuthNoPriv, empty engineID/user) -> byte-exact Report
     req_disc = ber_seq(
-        ber_int(3) + ber_int(888) + ber_int(65507) + ber_octet(bytes([0x04]))
-        + ber_int(3)
+        ber_int(3) + header(888, 65507, 0x04)
         + ber_octet(ber_seq(ber_octet(b""), ber_int(0), ber_int(0),
                             ber_octet(b""), ber_octet(b"\x00" * 24),
                             ber_octet(b"\x00" * 8)))
         + ber_seq(ber_octet(b""), ber_octet(b""),
                   ber_pdu(0xA0, 4242, 0, 0, [ber_varbind(sysdescr_oid, ber_null())])))
     resp_disc = make_report_response(888, 4242, unkeng_oid, 1,
-                                     ENGINE_ID, m2_boots, m2_time)
+                                         ENGINE_ID, m2_boots, m2_time)
 
     # 3) stale engineTime (delta 1000 s > 150 s window) -> NotInTimeWindows
     req_stale = make_authpriv_request(

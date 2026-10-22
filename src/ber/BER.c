@@ -263,8 +263,8 @@ int berDecodeVarbind(const uint8_t* in, size_t max, size_t* pos,
 
 // --- PDU -------------------------------------------------------------------
 int berEncodePdu(uint8_t* out, size_t cap, uint8_t pduTag,
-                 uint32_t reqId, uint32_t status, uint32_t idx,
-                 const BerVarbind* vbs, size_t nvbs) {
+                  uint32_t reqId, uint32_t status, uint32_t idx,
+                  const BerVarbind* vbs, size_t nvbs) {
   uint8_t body[1536];
   size_t n = 0;
   int r = berEncodeInt32(body + n, sizeof body - n, (int32_t)reqId);
@@ -276,13 +276,19 @@ int berEncodePdu(uint8_t* out, size_t cap, uint8_t pduTag,
   r = berEncodeInt32(body + n, sizeof body - n, (int32_t)idx);
   if (r < 0) return r;
   n += (size_t)r;
+  // VarBindList ::= SEQUENCE OF VarBind (RFC 3416 §3)
+  uint8_t vblist[1400];
+  size_t vn = 0;
   for (size_t i = 0; i < nvbs; i++) {
-    r = berEncodeVarbind(body + n, sizeof body - n,
+    r = berEncodeVarbind(vblist + vn, sizeof vblist - vn,
                          vbs[i].name, vbs[i].nameLen,
                          vbs[i].valueTlv, vbs[i].valueLen);
     if (r < 0) return r;
-  n += (size_t)r;
+    vn += (size_t)r;
   }
+  r = berEncodeTlv(body + n, sizeof body - n, BER_TAG_SEQUENCE, vblist, vn);
+  if (r < 0) return r;
+  n += (size_t)r;
   return berEncodeTlv(out, cap, pduTag, body, n);
 }
 
@@ -302,11 +308,17 @@ int berDecodePdu(const uint8_t* in, size_t max, size_t* pos,
   r = berDecodeInt32(in, contentEnd, pos, &v); if (r < 0) return r; *status = (uint32_t)v;
   r = berDecodeInt32(in, contentEnd, pos, &v); if (r < 0) return r; *idx = (uint32_t)v;
 
+  // VarBindList ::= SEQUENCE OF VarBind (RFC 3416 §3)
+  r = berDecodeTlv(in, contentEnd, pos, &tag, &len);
+  if (r < 0) return r;
+  if (tag != BER_TAG_SEQUENCE) return BER_ERR_TYPE;
+  size_t vbEnd = *pos + len;
+
   size_t n = 0;
-  while (*pos < contentEnd) {
+  while (*pos < vbEnd) {
     if (n >= maxVbs) return BER_ERR_OVERFLOW;
     size_t nameLen = BER_OID_MAX_ARCS;
-    r = berDecodeVarbind(in, contentEnd, pos,
+    r = berDecodeVarbind(in, vbEnd, pos,
                          vbs[n].name, &nameLen,
                          &vbs[n].decValueTag, &vbs[n].decValueOff,
                          &vbs[n].decValueLen);
@@ -379,20 +391,29 @@ int berEncodeV3Message(uint8_t* out, size_t cap,
                        const uint8_t* secParams, size_t secParamsLen,
                        const uint8_t* scopedPdu, size_t scopedPduLen) {
   uint8_t body[1600];
-  size_t n = 0;
-  int r = berEncodeInt32(body + n, sizeof body - n, 3);      // msgVersion
+  uint8_t hdr[64];
+  size_t n = 0, hn = 0;
+  int r;
+
+  // msgGlobalData ::= HeaderData (RFC 3412 §6) — a nested SEQUENCE, NOT the
+  // four fields flattened into the outer SNMPv3Message SEQUENCE.
+  r = berEncodeInt32(hdr + hn, sizeof hdr - hn, (int32_t)msgId);
+  if (r < 0) return r;
+  hn += (size_t)r;
+  r = berEncodeInt32(hdr + hn, sizeof hdr - hn, (int32_t)maxSize);
+  if (r < 0) return r;
+  hn += (size_t)r;
+  r = berEncodeOctetString(hdr + hn, sizeof hdr - hn, &msgFlags, 1);
+  if (r < 0) return r;
+  hn += (size_t)r;
+  r = berEncodeInt32(hdr + hn, sizeof hdr - hn, (int32_t)secModel);
+  if (r < 0) return r;
+  hn += (size_t)r;
+
+  r = berEncodeInt32(body + n, sizeof body - n, 3);      // msgVersion
   if (r < 0) return r;
   n += (size_t)r;
-  r = berEncodeInt32(body + n, sizeof body - n, (int32_t)msgId);
-  if (r < 0) return r;
-  n += (size_t)r;
-  r = berEncodeInt32(body + n, sizeof body - n, (int32_t)maxSize);
-  if (r < 0) return r;
-  n += (size_t)r;
-  r = berEncodeOctetString(body + n, sizeof body - n, &msgFlags, 1);
-  if (r < 0) return r;
-  n += (size_t)r;
-  r = berEncodeInt32(body + n, sizeof body - n, (int32_t)secModel);
+  r = berEncodeTlv(body + n, sizeof body - n, BER_TAG_SEQUENCE, hdr, hn);
   if (r < 0) return r;
   n += (size_t)r;
   r = berEncodeOctetString(body + n, sizeof body - n, secParams, secParamsLen);
@@ -431,23 +452,30 @@ int berDecodeV3Message(const uint8_t* in, size_t max,
   if (v != 3) return BER_ERR_TYPE;                       // v3 only
   if (version != NULL) *version = (uint8_t)v;
 
-  r = berDecodeInt32(in, contentEnd, &pos, &v);          // msgID
+  // msgGlobalData ::= HeaderData (RFC 3412 §6) — a nested SEQUENCE.
+  r = berDecodeTlv(in, contentEnd, &pos, &tag, &len);
+  if (r < 0) return r;
+  if (tag != BER_TAG_SEQUENCE) return BER_ERR_TYPE;
+  size_t hdrEnd = pos + len;
+
+  r = berDecodeInt32(in, hdrEnd, &pos, &v);              // msgID
   if (r < 0) return r;
   *msgId = (uint32_t)v;
 
-  r = berDecodeInt32(in, contentEnd, &pos, &v);          // msgMaxSize
+  r = berDecodeInt32(in, hdrEnd, &pos, &v);              // msgMaxSize
   if (r < 0) return r;
   *maxSize = (uint32_t)v;
 
-  r = berDecodeTlv(in, contentEnd, &pos, &tag, &len);    // msgFlags
+  r = berDecodeTlv(in, hdrEnd, &pos, &tag, &len);        // msgFlags
   if (r < 0) return r;
   if (tag != BER_TAG_OCTET_STRING || len != 1) return BER_ERR_TYPE;
   *msgFlags = in[pos];
   pos += 1;
 
-  r = berDecodeInt32(in, contentEnd, &pos, &v);          // security model
+  r = berDecodeInt32(in, hdrEnd, &pos, &v);              // msgSecurityModel
   if (r < 0) return r;
   *secModel = (uint8_t)v;
+  if (pos != hdrEnd) return BER_ERR_LENGTH;              // trailing in HeaderData
 
   r = berDecodeTlv(in, contentEnd, &pos, &tag, &len);    // securityParameters
   if (r < 0) return r;

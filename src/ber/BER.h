@@ -140,6 +140,9 @@ int berDecodeScopedPdu(const uint8_t* in, size_t max, size_t* pos,
                        size_t* pduOff, size_t* pduLen);
 
 // --- v3 message envelope (RFC 3412 §6) -----------------------------------
+// SNMPv3Message ::= SEQUENCE { msgVersion, msgGlobalData HeaderData,
+//   msgSecurityParameters OCTET STRING, msgData ScopedPduData }, where
+// HeaderData ::= SEQUENCE { msgID, msgMaxSize, msgFlags, msgSecurityModel }.
 // `scopedPdu` bytes are the msgData region: with the privFlag (bit1) set they
 // are the encrypted scopedPDU and get wrapped in an OCTET STRING; without it
 // they are the plaintext scopedPDU TLV and are appended as-is.
