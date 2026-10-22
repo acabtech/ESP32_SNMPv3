@@ -33,7 +33,7 @@ You can use this library to use your ESP32 as SMTPv3 node over Wi-Fi to collect 
 | M0 | Repo scaffold, API surface, CI (lint), interop runbooks | ✅ |
 | M1 | BER codec + USM keys/crypto core (host-tested vs RFC vectors) | ✅ |
 | M2 | Agent engine: dispatch, MIB tree, Get/GetNext/GetBulk/Set; NVS engine state | ✅ |
-| M3 | v3 traps + informs, on-device soak | ⏳ |
+| M3 | v3 traps + informs (code + host tests); on-device soak | 🟡 code landed, soak pending |
 | M4 | Zabbix + Home Assistant integration proof, registry submission | ⏳ |
 
 ## Getting started

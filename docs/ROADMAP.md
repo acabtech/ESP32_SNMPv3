@@ -1,8 +1,8 @@
 # Roadmap
 
-Milestones with exit criteria. Current position: **M2 code landed**
-(2026-09-30, `store_esp32.cpp` NVS store; on-device net-snmp exit pending,
-see below).
+Milestones with exit criteria. Current position: **M3 software landed**
+(2026-10-22, v3 traps + informs with the RFC 3416 ack/retry state machine;
+the on-device soak remains hardware-gated, see below).
 
 ## M0 — Scaffold (✅)
 - Repo structure per Arduino library spec, `library.properties`, GPL-3.0
@@ -49,12 +49,18 @@ maintainer — hardware access lands later).
 Exit: net-snmp walk/bulk/set against a real board, authPriv only.
 
 ## M3 — Notifications + soak
-- v3 traps (fire-and-forget) and informs (RFC 3416 §3.2.5 ack/retry/until
-  confirm, max 3 retries / 5 s total).
-- 48 h Zabbix soak, power-cycle ×50, trap storm.
+- **v3 traps** (fire-and-forget) and **informs** (RFC 3416 §3.2.5 ack/retry,
+  max 3 retries / 5 s total) — ✅ **code landed** (2026-10-22):
+  `agentBuildNotification()` + the `AgentInform` retry state machine in
+  `src/agent/AgentCore.c`; `sendTrap()`/`sendInform()` wired in
+  `src/SnmpV3Agent.cpp`; host tests in `tests/host/test_notify.c`.
+- 48 h Zabbix soak, power-cycle ×50, trap storm — ⏳ **hardware-gated**
+  (requires a real board + NMS; not runnable in CI).
 - Site: flash/PSRAM decision review for v0.2.
 
 Exit: Zabbix + Home Assistant graphs live for 48 h with zero errors.
+Remaining: the on-device soak (hardware-gated) — the notification code and
+its host tests are complete.
 
 ## M4 — Ship
 - Docs pass "grandchild test"; CONTRIBUTING final; changelog; semver tag.

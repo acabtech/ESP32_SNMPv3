@@ -86,6 +86,59 @@ typedef enum {
 int agentProcess(AgentState* s, const uint8_t* in, size_t inLen,
                  uint32_t nowMs, uint8_t* out, size_t cap, size_t* outLen);
 
+// --- v3 notifications: traps / informs (M3) --------------------------------
+// Standard notification varbind OIDs (RFC 3416 §4.2.6):
+//   sysUpTime.0   = 1.3.6.1.2.1.1.3.0
+//   snmpTrapOID.0 = 1.3.6.1.6.3.1.1.4.1.0
+// A notification's varbind list is [sysUpTime.0, snmpTrapOID.0, trapOid=value].
+
+// Inform retry policy (RFC 3416 §3.2.5, docs/ROADMAP.md M3):
+//   max 3 retries within a 5 s total budget -> 4 attempts, 1250 ms each.
+#define AGENT_INFORM_MAX_RETRIES 3
+#define AGENT_INFORM_TOTAL_MS    5000u
+#define AGENT_INFORM_ATTEMPT_MS \
+  (AGENT_INFORM_TOTAL_MS / (AGENT_INFORM_MAX_RETRIES + 1))
+
+// Find a user by name; NULL when absent.
+AgentUser* agentFindUser(AgentState* s, const char* name);
+
+// Build a v3 notification message (Trap or Inform) for `trapOid`, authPriv,
+// as `user`. `pduTag` = BER_TAG_TRAP_V2 (fire-and-forget) or
+// BER_TAG_INFORM_REQ (acknowledged). The engine clock is refreshed from
+// `nowMs`; `uptimeTicks` is the agent's sysUpTime in hundredths of seconds.
+// Returns 0 and sets *outLen, or negative on error.
+int agentBuildNotification(AgentState* s, const AgentUser* user,
+                           uint8_t pduTag, uint32_t msgId, uint32_t reqId,
+                           const uint32_t* trapOid, size_t trapOidLen,
+                           uint32_t uptimeTicks, uint32_t nowMs,
+                           uint8_t* out, size_t cap, size_t* outLen);
+
+// --- inform retry state machine (non-blocking, tick-driven) ----------------
+typedef struct {
+  bool     active;
+  uint8_t  msg[AGENT_MAX_MSG];   // the built inform datagram (re-sent verbatim)
+  size_t   msgLen;
+  uint32_t msgId;
+  uint32_t reqId;
+  uint32_t startMs;              // when the inform began (budget anchor)
+  uint32_t sentMs;               // when the current attempt was sent
+  uint8_t  attempts;             // sends so far (1 = initial)
+} AgentInform;
+
+// Arm the state machine with a built message (attempts = 1, sent now).
+void agentInformStart(AgentInform* inf, const uint8_t* msg, size_t msgLen,
+                      uint32_t msgId, uint32_t reqId, uint32_t nowMs);
+
+// Drive retries. Returns 1 = (re)send inf->msg now, 0 = keep waiting,
+// -1 = give up (budget exhausted). Clears `active` on -1.
+int agentInformTick(AgentInform* inf, uint32_t nowMs);
+
+// Verify a manager response against a pending inform: envelope + engineID +
+// user + MAC + decrypt + Response PDU with a matching request-id.
+// Returns 1 = acknowledged (clears `active`), 0 = no match / not an ack.
+int agentInformAck(AgentInform* inf, AgentState* s, const AgentUser* user,
+                   const uint8_t* resp, size_t respLen);
+
 #ifdef __cplusplus
 }
 #endif

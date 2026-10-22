@@ -42,7 +42,7 @@ void setup() {
   Serial.printf("\nWi-Fi connected: %s\n", WiFi.localIP().toString().c_str());
 
   if (!SNMPv3.begin()) {
-    Serial.println("[SNMP] agent failed to start (M0 scaffold)");
+    Serial.println("[SNMP] agent failed to start");
     return;
   }
   SNMPv3.addUser("telemetry", "auth-passphrase", "priv-passphrase");
@@ -57,11 +57,10 @@ void loop() {
   bool now = digitalRead(BTN_PIN);
   if (last == HIGH && now == LOW) {
     Serial.println("[SNMP] sending v3 trap");
-    // TODO(M3): sendTrap/oid, returns once the core lands.
     if (SNMPv3.sendTrap(OID_BTN)) {
       Serial.println("[SNMP] trap sent");
     } else {
-      Serial.println("[SNMP] sendTrap unavailable (M0 scaffold)");
+      Serial.println("[SNMP] sendTrap failed");
     }
   }
   last = now;

@@ -38,8 +38,8 @@ class SnmpV3Agent {
   // opens the UDP :161 listener. Returns false if radio/NVS unavailable.
   bool begin(uint16_t agentPort = 161);
 
-  // Must be called from loop(); pumps the UDP socket, dispatches requests,
-  // retries informs. Non-blocking, returns in << 1 ms when idle.
+  // Must be called from loop(); pumps the UDP :161 socket and dispatches
+  // requests. Non-blocking, returns in << 1 ms when idle.
   void loop();
 
   // --- USM users -----------------------------------------------------------
@@ -77,10 +77,13 @@ class SnmpV3Agent {
   // --- v3 notifications (traps/informs) ------------------------------------
   // Target NMS for traps/informs (UDP :162 by default).
   void setTrapManager(IPAddress ip, uint16_t port = 162);
-  // Send a v3 trap for the given OID (instance optional). Fire-and-forget.
+  // Send a v3 trap for the given OID (instance optional). Fire-and-forget;
+  // sent authPriv as the first registered user. Returns true when the
+  // datagram was handed to the network stack.
   bool sendTrap(const char* oid, uint32_t instance = 0);
-  // Send a v3 inform: waits for the NMS response PDU, retries per RFC 3416
-  // (max 3 retries/5 s). Returns true when acknowledged.
+  // Send a v3 inform: waits for the NMS Response PDU, retrying per RFC 3416
+  // (max 3 retries / 5 s total). Returns true when acknowledged.
+  // NOTE: blocks loop() for up to 5 s while awaiting the acknowledgement.
   bool sendInform(const char* oid, uint32_t instance = 0);
 
   // --- introspection --------------------------------------------------------

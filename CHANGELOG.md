@@ -10,7 +10,19 @@ All notable changes to ESP32-SNMPv3-Agent. Format: Keep a Changelog 1.1.
   Bersama) — the placeholder enterprise number is gone from src, examples,
   docs, and tests; the wire oracles were regenerated accordingly.
 
-### Added (M2 — agent engine, this rev)
+### Added (M3 — notifications, this rev)
+- `src/agent/AgentCore.c`: `agentBuildNotification()` builds authPriv v3
+  Trap/Inform messages (varbind list = sysUpTime.0, snmpTrapOID.0, payload);
+  the `AgentInform` retry state machine (`agentInformStart`/`Tick`/`Ack`)
+  implements RFC 3416 §3.2.5 ack/retry — max 3 retries within a 5 s budget.
+- `src/SnmpV3Agent.cpp`: `sendTrap()` (fire-and-forget) and `sendInform()`
+  (bounded blocking wait for the manager Response) wired to the UDP :162
+  notification socket; `setTrapManager()` target honoured.
+- `tests/host/test_notify.c`: trap/inform construction (MAC + CFB verify),
+  retry timing, and acknowledgement matching (matching / wrong request-id /
+  tampered MAC).
+
+### Added (M2 — agent engine)
 - `src/agent/AgentCore.c`: request gate + dispatch — discovery reports, and
   Get/GetNext/GetBulk/Set with RFC 3412 error/exception OIDs.
 - MIB tree (`src/mib/MIB.c`): SNMPv2-MIB + SNMPv3-MIB subsets, app OIDs,
@@ -55,6 +67,12 @@ All notable changes to ESP32-SNMPv3-Agent. Format: Keep a Changelog 1.1.
 - SNMPv3 only, agent role only, USM authPriv only (HMAC-SHA-256 + AES-128).
 - engineBoots/engineTime persisted via NVS; replay msgID cache; RFC 3414
   discovery report exchange.
+
+### Removed (this rev — ESP32 compile gate)
+- `src/SNMPv3.cpp` (corrupted JSON, not C++) and `src/SNMPv3.h` (unused
+  alternate API) — abandoned "First attempt" leftovers that broke the
+  arduino-cli ESP32 build. All three examples now compile on
+  `esp32`, `esp32s3`, and `esp32s2`.
 
 ### Fixed (this rev — CI compile gate + warnings)
 - `src/usm/store_esp32.c` → `store_esp32.cpp`: the NVS store uses the C++

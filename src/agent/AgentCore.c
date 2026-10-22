@@ -749,3 +749,179 @@ static int decodeIncomingPdu(const uint8_t* plain, size_t plainLen,
   for (size_t i = 0; i < *nvbs; i++) vbs[i].decValueOff += po;
   return r;
 }
+
+// --- v3 notifications: traps / informs (M3) ---------------------------------
+
+AgentUser* agentFindUser(AgentState* s, const char* name) {
+  if (s == NULL || name == NULL) return NULL;
+  size_t len = strlen(name);
+  for (size_t i = 0; i < s->nUsers; i++) {
+    if (s->users[i].nameLen == len &&
+        memcmp(s->users[i].name, name, len) == 0)
+      return &s->users[i];
+  }
+  return NULL;
+}
+
+// Standard notification varbind OIDs (RFC 3416 §4.2.6).
+static const uint32_t kSysUpTimeOid[]   = {1, 3, 6, 1, 2, 1, 1, 3, 0};
+static const uint32_t kSnmpTrapOidOid[] = {1, 3, 6, 1, 6, 3, 1, 1, 4, 1, 0};
+
+int agentBuildNotification(AgentState* s, const AgentUser* user,
+                           uint8_t pduTag, uint32_t msgId, uint32_t reqId,
+                           const uint32_t* trapOid, size_t trapOidLen,
+                           uint32_t uptimeTicks, uint32_t nowMs,
+                           uint8_t* out, size_t cap, size_t* outLen) {
+  if (s == NULL || user == NULL || trapOid == NULL || out == NULL ||
+      outLen == NULL)
+    return -1;
+  if (trapOidLen == 0 || trapOidLen > BER_OID_MAX_ARCS) return -1;
+  if (pduTag != BER_TAG_TRAP_V2 && pduTag != BER_TAG_INFORM_REQ) return -1;
+
+  engineTimeNow(s, nowMs);   // refresh the authoritative clock
+
+  uint8_t vb0[8], vb1[BER_OID_MAX_ARCS * 5 + 8], vb2[MIB_OCTETS_MAX + 16];
+  BerVarbind vbs[3];
+  size_t nvbs = 0;
+
+  // 0) sysUpTime.0 = TimeTicks(uptimeTicks)
+  int n = berEncodeUintTagged(vb0, sizeof vb0, BER_TAG_TIMETICKS, uptimeTicks);
+  if (n < 0) return n;
+  memset(&vbs[nvbs], 0, sizeof vbs[nvbs]);
+  memcpy(vbs[nvbs].name, kSysUpTimeOid, sizeof kSysUpTimeOid);
+  vbs[nvbs].nameLen = sizeof kSysUpTimeOid / sizeof kSysUpTimeOid[0];
+  vbs[nvbs].valueTlv = vb0;
+  vbs[nvbs].valueLen = (size_t)n;
+  nvbs++;
+
+  // 1) snmpTrapOID.0 = OID(trapOid)
+  n = berEncodeOid(vb1, sizeof vb1, trapOid, trapOidLen);
+  if (n < 0) return n;
+  memset(&vbs[nvbs], 0, sizeof vbs[nvbs]);
+  memcpy(vbs[nvbs].name, kSnmpTrapOidOid, sizeof kSnmpTrapOidOid);
+  vbs[nvbs].nameLen = sizeof kSnmpTrapOidOid / sizeof kSnmpTrapOidOid[0];
+  vbs[nvbs].valueTlv = vb1;
+  vbs[nvbs].valueLen = (size_t)n;
+  nvbs++;
+
+  // 2) trapOid = current value (only when the object is registered)
+  MibValue val;
+  if (mibGet(trapOid, trapOidLen, &val) == 1) {
+    n = encodeMibValue(vb2, sizeof vb2, &val);
+    if (n < 0) return n;
+    memset(&vbs[nvbs], 0, sizeof vbs[nvbs]);
+    memcpy(vbs[nvbs].name, trapOid, trapOidLen * sizeof vbs[nvbs].name[0]);
+    vbs[nvbs].nameLen = trapOidLen;
+    vbs[nvbs].valueTlv = vb2;
+    vbs[nvbs].valueLen = (size_t)n;
+    nvbs++;
+  }
+
+  int r = berEncodePdu(s_pdu, sizeof s_pdu, pduTag, reqId, 0, 0, vbs, nvbs);
+  if (r < 0) return r;
+
+  // Traps are fire-and-forget (reportable=0); informs expect a Response
+  // (reportable=1) so the manager can Report on error (RFC 3412 §7.1).
+  uint8_t flags = (pduTag == BER_TAG_INFORM_REQ) ? 0x07 : 0x03;
+  return assembleMessage(s, user, msgId, flags, s_pdu, (size_t)r,
+                         out, cap, outLen);
+}
+
+void agentInformStart(AgentInform* inf, const uint8_t* msg, size_t msgLen,
+                      uint32_t msgId, uint32_t reqId, uint32_t nowMs) {
+  memset(inf, 0, sizeof *inf);
+  if (msgLen > sizeof inf->msg) msgLen = sizeof inf->msg;
+  memcpy(inf->msg, msg, msgLen);
+  inf->msgLen = msgLen;
+  inf->msgId = msgId;
+  inf->reqId = reqId;
+  inf->startMs = nowMs;
+  inf->sentMs = nowMs;
+  inf->attempts = 1;
+  inf->active = true;
+}
+
+int agentInformTick(AgentInform* inf, uint32_t nowMs) {
+  if (inf == NULL || !inf->active) return -1;
+  if ((uint32_t)(nowMs - inf->startMs) >= AGENT_INFORM_TOTAL_MS) {
+    inf->active = false;
+    return -1;
+  }
+  if ((uint32_t)(nowMs - inf->sentMs) >= AGENT_INFORM_ATTEMPT_MS) {
+    if (inf->attempts > AGENT_INFORM_MAX_RETRIES) {
+      inf->active = false;
+      return -1;
+    }
+    inf->attempts++;
+    inf->sentMs = nowMs;
+    return 1;
+  }
+  return 0;
+}
+
+int agentInformAck(AgentInform* inf, AgentState* s, const AgentUser* user,
+                   const uint8_t* resp, size_t respLen) {
+  if (inf == NULL || !inf->active || s == NULL || user == NULL) return 0;
+  if (respLen < 16 || respLen > AGENT_MAX_MSG) return 0;
+
+  static uint8_t buf[AGENT_MAX_MSG];
+  memcpy(buf, resp, respLen);
+
+  uint8_t ver; uint32_t msgId, msgMax; uint8_t flags, secModel;
+  size_t spo, spl, sdo, sdl;
+  if (berDecodeV3Message(buf, respLen, &ver, &msgId, &msgMax, &flags,
+                         &secModel, &spo, &spl, &sdo, &sdl) < 0)
+    return 0;
+  if (secModel != 3) return 0;
+
+  SecParams sp;
+  if (decodeSecParams(buf + spo, spl, flags, &sp) < 0) return 0;
+
+  // The authoritative engine is us (the inform sender): the manager echoes
+  // our engineID and the user name (RFC 3412 §7.1).
+  if (sp.engineIdLen != s->engineIdLen ||
+      memcmp(sp.engineId, s->engineId, s->engineIdLen) != 0)
+    return 0;
+  if (sp.userLen != user->nameLen ||
+      memcmp(sp.user, user->name, user->nameLen) != 0)
+    return 0;
+
+  // Inform responses must be authenticated (authPriv mirrors the request).
+  if (!(flags & 0x01)) return 0;
+  {
+    uint8_t digest[SNMPV3_SHA256_KEY];
+    uint8_t saved[SNMPV3_SHA256_MAC];
+    const uint8_t* mac = buf + spo + sp.authParamsOff;
+    memcpy(saved, mac, SNMPV3_SHA256_MAC);
+    memset((void*)mac, 0, SNMPV3_SHA256_MAC);
+    int r = usmHmacSha256(user->authKey, SNMPV3_SHA256_KEY, buf, respLen,
+                          digest);
+    memcpy((void*)mac, saved, SNMPV3_SHA256_MAC);
+    if (r < 0 || memcmp(digest, saved, SNMPV3_SHA256_MAC) != 0) return 0;
+  }
+
+  static uint8_t plain[AGENT_MAX_MSG];
+  size_t plainLen;
+  if (flags & 0x02) {
+    if (sp.salt == NULL || sdl == 0 || sdl > sizeof plain) return 0;
+    uint8_t iv[SNMPV3_AES_IV];
+    usmAesMakeIv(iv, sp.boots, sp.time, sp.salt);
+    if (usmAesCfbDecrypt(user->privKey, iv, buf + sdo, plain, sdl) < 0)
+      return 0;
+    plainLen = sdl;
+  } else {
+    if (sdl < 2 || sdl > sizeof plain) return 0;
+    memcpy(plain, buf + sdo, sdl);
+    plainLen = sdl;
+  }
+
+  uint8_t pduTag; uint32_t reqId, status, idx;
+  BerVarbind vbs[1]; size_t nvbs = 0;
+  if (decodeIncomingPdu(plain, plainLen, &pduTag, &reqId, &status, &idx,
+                        vbs, 1, &nvbs) < 0)
+    return 0;
+  if (pduTag != BER_TAG_RESPONSE || reqId != inf->reqId) return 0;
+
+  inf->active = false;
+  return 1;
+}

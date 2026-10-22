@@ -43,6 +43,9 @@ static WiFiUDP s_udp;          // agent listener (requests)
 static WiFiUDP s_trapUdp;      // outbound notifications (M3)
 static IPAddress s_trapIp;
 static uint16_t s_trapPort = 162;
+static bool     s_trapBound = false;   // s_trapUdp bound to an ephemeral port
+static uint32_t s_msgIdCounter = 0;    // outgoing notification msgID source
+static AgentInform s_inform;           // pending inform (retry state machine)
 #endif
 
 // engine ID override (setEngineId before begin)
@@ -233,14 +236,102 @@ void SnmpV3Agent::setTrapManager(IPAddress ip, uint16_t port) {
 #endif
 }
 
+#if defined(ARDUINO_ARCH_ESP32)
+// Bind the outbound notification socket once (ephemeral source port, so the
+// manager's Response to an inform comes back to us).
+static bool ensureTrapSocket() {
+  if (s_trapBound) return true;
+  if (!s_trapUdp.begin(0)) return false;
+  s_trapBound = true;
+  return true;
+}
+
+// Parse "oid" (+ optional instance), pick the first registered user, and build
+// a v3 notification datagram. Returns the message length, or 0 on failure.
+static size_t buildNotification(const char* oid, uint32_t instance,
+                                uint8_t pduTag, uint32_t msgId, uint32_t reqId,
+                                uint8_t* out, size_t cap) {
+  if (oid == NULL || s_state.nUsers == 0) return 0;
+  uint32_t arcs[BER_OID_MAX_ARCS];
+  int n = mibParseOid(oid, arcs, BER_OID_MAX_ARCS);
+  if (n < 0) return 0;
+  if (instance != 0) {
+    if ((size_t)n >= BER_OID_MAX_ARCS) return 0;
+    arcs[n++] = instance;
+  }
+  size_t outLen = 0;
+  if (agentBuildNotification(&s_state, &s_state.users[0], pduTag, msgId, reqId,
+                             arcs, (size_t)n, hook_sysUpTime(), millis(),
+                             out, cap, &outLen) < 0)
+    return 0;
+  return outLen;
+}
+#endif
+
 bool SnmpV3Agent::sendTrap(const char* oid, uint32_t instance) {
+#if defined(ARDUINO_ARCH_ESP32)
+  if (!s_begun || !ensureTrapSocket()) return false;
+  uint8_t msg[AGENT_MAX_MSG + 64];
+  uint32_t msgId = ++s_msgIdCounter;
+  size_t msgLen = buildNotification(oid, instance, BER_TAG_TRAP_V2,
+                                    msgId, msgId, msg, sizeof msg);
+  if (msgLen == 0) return false;
+  s_trapUdp.beginPacket(s_trapIp, s_trapPort);
+  s_trapUdp.write(msg, msgLen);
+  return s_trapUdp.endPacket() == 1;   // fire-and-forget
+#else
   (void)oid; (void)instance;
-  return false;   // M3: notifications + soak (docs/ROADMAP.md)
+  return false;
+#endif
 }
 
 bool SnmpV3Agent::sendInform(const char* oid, uint32_t instance) {
+#if defined(ARDUINO_ARCH_ESP32)
+  if (!s_begun || !ensureTrapSocket()) return false;
+  uint8_t msg[AGENT_MAX_MSG + 64];
+  uint32_t msgId = ++s_msgIdCounter;
+  uint32_t reqId = msgId;
+  size_t msgLen = buildNotification(oid, instance, BER_TAG_INFORM_REQ,
+                                    msgId, reqId, msg, sizeof msg);
+  if (msgLen == 0) return false;
+
+  // Arm the retry state machine and send the first attempt.
+  agentInformStart(&s_inform, msg, msgLen, msgId, reqId, millis());
+  s_trapUdp.beginPacket(s_trapIp, s_trapPort);
+  s_trapUdp.write(msg, msgLen);
+  s_trapUdp.endPacket();
+
+  // Bounded wait for the manager's Response (RFC 3416 §3.2.5): pump the
+  // notification socket, resend on the retry schedule, give up at 5 s.
+  // NOTE: this blocks loop() for up to AGENT_INFORM_TOTAL_MS.
+  static uint8_t rbuf[AGENT_MAX_MSG + 64];
+  for (;;) {
+    int rn = s_trapUdp.parsePacket();
+    if (rn > 0) {
+      if ((size_t)rn <= sizeof rbuf) {
+        s_trapUdp.read(rbuf, rn);
+        if (agentInformAck(&s_inform, &s_state, &s_state.users[0],
+                           rbuf, (size_t)rn)) {
+          s_trapUdp.clear();
+          return true;
+        }
+      }
+      s_trapUdp.clear();
+    }
+    int t = agentInformTick(&s_inform, millis());
+    if (t == 1) {
+      s_trapUdp.beginPacket(s_trapIp, s_trapPort);
+      s_trapUdp.write(s_inform.msg, s_inform.msgLen);
+      s_trapUdp.endPacket();
+    } else if (t < 0) {
+      return false;
+    }
+    delay(1);
+  }
+#else
   (void)oid; (void)instance;
-  return false;   // M3
+  return false;
+#endif
 }
 
 uint32_t SnmpV3Agent::engineBoots() { return s_state.clock.boots; }

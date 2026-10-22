@@ -8,7 +8,8 @@ SRC     := ../../src
 INCLUDES := -I$(SRC) -I$(SRC)/ber -I$(SRC)/usm -Isoft -Ivec
 
 OBJS := build/main.o build/test_soft.o build/test_ber.o build/test_usm.o \
-        build/test_mib.o build/test_agent.o build/test_store.o \
+        build/test_mib.o build/test_agent.o build/test_notify.o \
+        build/test_store.o \
         build/crypto_soft.o build/BER.o build/USM.o build/MIB.o build/AgentCore.o
 
 all: build/test_runner

@@ -1,7 +1,8 @@
 # Design — ESP32-SNMPv3-Agent
 
-Status: **M0..M2 landed** (scaffold; codec/USM core host-tested; agent engine
-+ NVS persistence in this rev). Interfaces below are the v0.1 contract; the
+Status: **M0..M3 (software) landed** (scaffold; codec/USM core host-tested;
+agent engine + NVS persistence; v3 traps/informs + retry state machine). The
+on-device soak is hardware-gated. Interfaces below are the v0.1 contract; the
 numbered "scope lock" reflects decisions approved by the maintainer
 (2026-09-29).
 
@@ -46,6 +47,28 @@ SnmpV3Agent (public API, singleton)
    an authPriv Response.
 4. Subsequent traffic is authPriv end-to-end; engineTime is kept by the agent
    and the *manager* keeps the boots/time pair authoritative per its cache.
+
+### Notifications (traps / informs)
+
+The agent is the authoritative engine for notifications it originates, so a
+notification reuses the same authPriv envelope as a response: our engineID,
+boots/time, the user name, HMAC-SHA-256 MAC and AES-128-CFB privacy.
+
+- **Varbind list** (RFC 3416 §4.2.6): `sysUpTime.0` (TimeTicks),
+  `snmpTrapOID.0` (the notification OID), then the payload varbind
+  (`<trapOid> = current MIB value`, when the object is registered).
+- **Trap** (`BER_TAG_TRAP_V2`): fire-and-forget, msgFlags `authPriv`
+  (reportable = 0).
+- **Inform** (`BER_TAG_INFORM_REQ`): msgFlags `authPriv + reportable`; the
+  manager answers with a Response PDU carrying the same request-id.
+- **Retry** (RFC 3416 §3.2.5): `AgentInform` sends the initial attempt, then
+  retries on a fixed schedule — **max 3 retries within a 5 s budget**
+  (4 attempts, 1250 ms each). `agentInformTick()` is non-blocking and
+  tick-driven; `agentInformAck()` verifies the manager Response (engineID +
+  user + MAC + decrypt + matching request-id) before clearing the state.
+- **Arduino layer**: `sendTrap()` is fire-and-forget; `sendInform()` performs
+  a bounded blocking wait (up to 5 s) pumping the UDP :162 socket, so it can
+  return "acknowledged". Notifications are sent as the first registered user.
 
 ### Engine state & NVS layout
 
