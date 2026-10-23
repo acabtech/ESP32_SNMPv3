@@ -25,7 +25,7 @@ Green since **M1** (2026-09-29); extended through **M3** (2026-10-22):
 
 ## Regenerating vectors
 
-    /tmp/pv/bin/python tests/host/vgen/gen_vectors.py     # or: make vectors
+    tests/.venv/bin/python tests/host/vgen/gen_vectors.py  # or: make vectors
 
 Requires a venv with `pysnmp==6.2.6` and `cryptography` (see
 tests/interop/README.md). Generated files are checked in so the test suite

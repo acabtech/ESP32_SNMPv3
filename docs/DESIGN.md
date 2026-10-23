@@ -1,8 +1,10 @@
 # Design — ESP32-SNMPv3-Agent
 
-Status: **M0..M3 (software) landed** (scaffold; codec/USM core host-tested;
-agent engine + NVS persistence; v3 traps/informs + retry state machine). The
-on-device soak is hardware-gated. Interfaces below are the v0.1 contract; the
+Status: **M0..M4 (repo-side) landed** (scaffold; codec/USM core host-tested;
+agent engine + NVS persistence; v3 traps/informs + retry state machine; docs
+pass + registry metadata + capstone kit + pysnmp mock agent). The on-device
+soak, the Library Manager submission, and the semver tag are
+maintainer/hardware-gated. Interfaces below are the v0.1 contract; the
 numbered "scope lock" reflects decisions approved by the maintainer
 (2026-09-29).
 
@@ -16,9 +18,9 @@ numbered "scope lock" reflects decisions approved by the maintainer
 | 4 | **Day-one interop** | Zabbix 8 (dogfood target, PT Alat Cerdas Adikarya Bersama homelab) + Home Assistant `snmp` integration; net-snmp is the engineering tool. |
 | 5 | **arduino-esp32 v3.x only** | IDF 5.x line. No backport to v2.x. CI matrix: `esp32`, `esp32s3`, `esp32s2`. |
 | 6 | **No PSRAM** | All state in SRAM. Fixed buffers, bounded allocations. PSRAM-only features are deferred. |
-| 7 | **GPL-3.0** | SPDX `GPL-3.0`. Public repo, Arduino Library Manager distribution. |
-| 8 | **Flagship demo** | Bare board + DHT22 on pin 4 (default), caching pattern in the example. |
-| 9 | **Registry standards** | `arduino-lint` (compliance: specification), GitHub Actions `compile-examples` on 3 FQBNs, semver tags, `library.properties` at root. |
+| 7 | **GPL-3.0** | SPDX `GPL-3.0-only` in `library.properties`; LICENSE at root. Public repo, Arduino Library Manager distribution. |
+| 8 | **Flagship demo** | Bare board + DHT22 on pin 4 (default), caching pattern in the example; full kit in `docs/GETTING-STARTED.md`. |
+| 9 | **Registry standards** | `arduino-lint` (compliance: specification), GitHub Actions `compile-examples` on 3 FQBNs, semver tags, `library.properties` at root, Library Manager badge in README. |
 
 ## 2. Architecture
 

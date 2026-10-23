@@ -1,8 +1,9 @@
 # Roadmap
 
-Milestones with exit criteria. Current position: **M3 software landed**
-(2026-10-22, v3 traps + informs with the RFC 3416 ack/retry state machine;
-the on-device soak remains hardware-gated, see below).
+Milestones with exit criteria. Current position: **M4 repo-side landed**
+(2026-10-23, docs pass + CONTRIBUTING + changelog + registry metadata +
+capstone kit + pysnmp mock agent; the Library Manager submission, semver tag,
+and the M3 on-device soak remain maintainer/hardware-gated, see below).
 
 ## M0 — Scaffold (✅)
 - Repo structure per Arduino library spec, `library.properties`, GPL-3.0
@@ -63,9 +64,25 @@ Remaining: the on-device soak (hardware-gated) — the notification code and
 its host tests are complete.
 
 ## M4 — Ship
-- Docs pass "grandchild test"; CONTRIBUTING final; changelog; semver tag.
-- Registry submission (Arduino Library Manager) + badge.
-- Capstone demo kit: DHT22 → SNMPv3 authPriv → Zabbix dashboard,
-  plus HA card. Marketing one-pager + license/permissions review.
+- Docs pass "grandchild test" — ✅ `docs/GETTING-STARTED.md`, the single
+  end-to-end guide (flash → poll → Zabbix → HA → traps → troubleshooting),
+  with the capstone demo folded in; interop runbooks remain the per-manager
+  deep dives.
+- CONTRIBUTING final — ✅ testing, PR checklist, release process, license.
+- Changelog — ✅ `[0.1.0]` dated 2026-10-23 with the M4 section.
+- Semver tag — ⏳ maintainer action (`git tag v0.1.0`).
+- Registry submission (Arduino Library Manager) + badge — 🟡 badge added to
+  README; `library.properties` registry-ready; submission is a maintainer
+  action (`arduino-cli lib publish`).
+- Capstone demo kit — ✅ folded into `docs/GETTING-STARTED.md` (DHT22 →
+  SNMPv3 authPriv → Zabbix dashboard + HA card, wiring + BOM + firmware).
+- Marketing one-pager — ✅ folded into the README ("What it does" +
+  "Why SNMPv3 authPriv?").
+- License/permissions review — ✅ GPL-3.0-only confirmed; SPDX in
+  `library.properties`; attribution in README/CONTRIBUTING.
+- Integration proof without hardware — ✅ `tests/interop/mock_agent.py`
+  (pysnmp CommandResponder mimicking the board's OIDs + authPriv user).
 
 Exit: `arduino-cli lib install ESP32-SNMPv3-Agent` works for a stranger.
+Repo-side prerequisites are complete; the submission + tag are the only
+remaining maintainer actions.

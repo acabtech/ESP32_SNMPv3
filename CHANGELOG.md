@@ -2,7 +2,7 @@
 
 All notable changes to ESP32-SNMPv3-Agent. Format: Keep a Changelog 1.1.
 
-## [Unreleased] — 0.1.0
+## [0.1.0] — 2026-10-23
 
 ### Changed
 - Example and app OIDs now live under the granted **IANA PEN 67018**
@@ -82,3 +82,46 @@ All notable changes to ESP32-SNMPv3-Agent. Format: Keep a Changelog 1.1.
 - `src/mib/MIB.c`: removed unused `properPrefix` (`-Wunused-function`).
 - `src/SnmpV3Agent.cpp`: `WiFiUDP::flush()` → `clear()` (deprecated in
   arduino-esp32 v3.x).
+
+### Added (M4 — ship)
+- `docs/GETTING-STARTED.md`: the single end-to-end guide — flash → poll
+  (net-snmp) → Zabbix → Home Assistant → traps → troubleshooting, with the
+  DHT22 capstone demo (BOM, wiring, OIDs) folded in. Links to the interop
+  runbooks for per-manager deep dives.
+- `tests/interop/mock_agent.py`: a runnable pysnmp `CommandResponder` that
+  mimics the board's OIDs (`1.3.6.1.4.1.67018.*`) with the same authPriv
+  user, so Zabbix/Home Assistant configs can be validated **without
+  hardware**.
+- `CONTRIBUTING.md`: finalized with testing instructions, PR checklist,
+  release process, and license note.
+- `README.md`: Library Manager badge, "Why SNMPv3 authPriv?" rationale,
+  hardware table, three-call quick example, and a documentation index;
+  status table updated (M4 marked 🟡 repo-side landed).
+- `library.properties`: registry-ready metadata verified (name, version,
+  author, sentence, paragraph, category, url, architectures, license).
+- `docs/DESIGN.md`: scope lock items 7–9 updated (SPDX `GPL-3.0-only`,
+  capstone kit, registry standards).
+
+### Fixed (M4 — docs + tooling)
+- `docs/ROADMAP.md`: M4 exit criteria clarified; M3 soak noted as
+  hardware-gated and deferred.
+- `README.md`: fixed the "SMTPv3" typo; consolidated the scattered
+  getting-started/one-pager/capstone content into `docs/GETTING-STARTED.md`.
+- `tests/interop/pysnmp_check.py`: ported to the pysnmp 6.2.6 asyncio API
+  (`pysnmp.hlapi.asyncio`) — the synchronous `pysnmp.hlapi` facade the script
+  used no longer exists in the pinned version, so every command failed at
+  import. Walk/bulk are now subtree-bounded, and client-side errors exit 2
+  with a clean message instead of a traceback.
+- `tests/interop/README.md`: documented the mock agent and the asyncio-based
+  checker, including the mock's OID table and run instructions.
+- Python tooling now uses a **test-scoped `tests/.venv/`** (already covered
+  by the `.venv/` gitignore rule) instead of the ephemeral `/tmp/pv` scratch
+  path, so the documented commands survive a reboot: `tests/interop/README.md`,
+  `tests/interop/mock_agent.py`, `tests/interop/pysnmp_check.py`,
+  `tests/host/README.md`, and `tests/host/Makefile`
+  (`PY ?= ../.venv/bin/python`).
+- `tests/host/vgen/gen_vectors.py`: dropped the hardcoded
+  `/tmp/pv/lib/python3.13/site-packages` `sys.path` hack (ephemeral *and*
+  version-pinned — wrong on Python 3.14). The generator now relies on being
+  run with the venv interpreter, as documented; regenerated vectors are
+  byte-identical.

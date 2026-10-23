@@ -2,7 +2,7 @@
 
 CC      ?= cc
 CFLAGS  ?= -std=c99 -Wall -Wextra -O2 -g
-PY      ?= /tmp/pv/bin/python
+PY      ?= ../.venv/bin/python
 
 SRC     := ../../src
 INCLUDES := -I$(SRC) -I$(SRC)/ber -I$(SRC)/usm -Isoft -Ivec

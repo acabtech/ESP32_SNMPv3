@@ -22,9 +22,9 @@ Oracles:
                       here-side decode+re-encode self-check so emitted bytes
                       are guaranteed sound before the C tests run.
 
-Run:  /tmp/pv/bin/python tests/host/vgen/gen_vectors.py
+Run:  tests/.venv/bin/python tests/host/vgen/gen_vectors.py  # see tests/interop/README.md
 """
-import hashlib, hmac as hmac_mod, pathlib, sys
+import hashlib, hmac as hmac_mod, pathlib
 
 HERE = pathlib.Path(__file__).resolve().parent
 SOFT = HERE.parent / "soft"
@@ -115,7 +115,6 @@ def aes_sboxes():
 # class) and localkey.localizeKey calls hashFunc(data); passing hashlib.sha256
 # (the class) satisfies both call sites.
 # ---------------------------------------------------------------------------
-sys.path.append(str(pathlib.Path("/tmp/pv/lib/python3.13/site-packages")))
 from pysnmp.proto.secmod.rfc3414 import localkey
 from pyasn1.type import univ
 
