@@ -3,27 +3,110 @@ name: CI
 on:
   push:
   pull_request:
+  workflow_dispatch: {}
+
+# ---------------------------------------------------------------------------
+# Self-hosted runners, pinned versions, nothing downloaded twice
+#
+# Every job runs on one of this repo's own runners on `opencode-sam`, inside the
+# `archlinux:base-devel` image that is already in the runner's local Docker
+# image store -- no image is pulled at run time.
+#
+# The container bind-mounts subdirectories of /home/github-runner/ci-cache on
+# the runner host, so every object CI needs is fetched once and then served from
+# the runner's own disk:
+#
+#   pacman-pkg    -> /var/cache/pacman/pkg    Arch packages (git, for checkout)
+#   arduino-tools -> /ci/cache/arduino-tools  pinned arduino-cli / arduino-lint
+#   locks         -> /ci/cache/locks          serialises pacman between runners
+#
+# The version pins below are deliberate and are what the on-disk caches were
+# populated with, so the pins and the caches have to move together. Bumping a
+# pin makes the next run re-fetch exactly that one object, then reuse it again.
+#
+# Note there is no `token:` input anywhere. The previous revision passed
+# `secrets.GH_TOKEN` to arduino/setup-arduino-cli and arduino/arduino-lint-action,
+# but this repository has no such secret, so both jobs died within seconds with
+# "Input required and not supplied: token". Running the pinned binaries straight
+# out of the cache removes that dependency (and the Gitea workaround the comment
+# referred to -- this repo is not mirrored there).
+# ---------------------------------------------------------------------------
+
+env:
+  ARDUINO_LINT_VERSION: 1.3.0
 
 jobs:
   lint:
-    runs-on: ubuntu-latest
+    name: arduino-lint
+    runs-on: [self-hosted, opencode-sam, esp32-snmpv3]
+    container:
+      image: archlinux:base-devel
+      volumes:
+        - /home/github-runner/ci-cache/pacman-pkg:/var/cache/pacman/pkg
+        - /home/github-runner/ci-cache/locks:/ci/cache/locks
+        - /home/github-runner/ci-cache/arduino-tools:/ci/cache/arduino-tools
     steps:
-      - uses: actions/checkout@v4
-      - name: arduino-lint (Arduino Library specification compliance)
-        uses: arduino/arduino-lint-action@v2
-        with:
-          # Gitea injects a Gitea token as github.token; GitHub API rejects it.
-          # Pass the real GitHub token (stored as Actions secret GH_TOKEN).
-          token: ${{ secrets.GH_TOKEN }}
-          library-manager: false   # not yet in the Library Manager index (M3);
-                                   # 'update' mode would false-positive LP018
-          compliance: specification
+      # actions/checkout shells out to git, which the bare base-devel image does
+      # not ship. The package itself is already in the mounted pacman cache.
+      - name: Install git (reused from the local pacman cache)
+        run: |
+          flock /ci/cache/locks/pacman.lock \
+            pacman -Syu --noconfirm --needed --overwrite '*' git
 
-  # Host-side unit tests (no hardware, no Arduino SDK) — BER codec + USM
-  # layer against generated RFC/pysnmp vectors.
-  host-tests:
-    runs-on: ubuntu-latest
-    steps:
       - uses: actions/checkout@v4
+
+      # Fetched on the very first run only; every later run reuses the binary
+      # from the cache. A missing binary is re-fetched, so the cache is an
+      # optimisation and never a hidden prerequisite.
+      - name: Reuse the pinned arduino-lint
+        run: |
+          set -euo pipefail
+          bin=/ci/cache/arduino-tools/arduino-lint
+          if [ ! -x "$bin" ]; then
+            curl -fsSL -o /tmp/arduino-lint.tgz \
+              "https://github.com/arduino/arduino-lint/releases/download/${ARDUINO_LINT_VERSION}/arduino-lint_${ARDUINO_LINT_VERSION}_Linux_64bit.tar.gz"
+            tar xzf /tmp/arduino-lint.tgz -C /ci/cache/arduino-tools arduino-lint
+            rm -f /tmp/arduino-lint.tgz
+          fi
+          "$bin" --version
+
+      - name: arduino-lint (Arduino Library specification compliance)
+        run: |
+          set -euo pipefail
+          # arduino-lint derives part of the specification from the project
+          # folder name -- LS003 rejects e.g. `.`, which is what the previous
+          # revision effectively passed. Lint the library under the name that
+          # library.properties declares, the same name the compile job installs
+          # it as, so this stays correct if the repository is ever renamed.
+          name=$(sed -n 's/^name=//p' "$GITHUB_WORKSPACE/library.properties")
+          root=/tmp/arduino-lint
+          rm -rf "$root"
+          mkdir -p "$root"
+          cp -a "$GITHUB_WORKSPACE" "$root/$name"
+          /ci/cache/arduino-tools/arduino-lint \
+            --compliance specification \
+            --library-manager false \
+            --project-type library \
+            "$root/$name"
+
+  # Host-side unit tests (no hardware, no Arduino SDK) -- BER codec + USM
+  # layer against generated RFC/pysnmp vectors. Needs nothing beyond the
+  # compiler and make that base-devel already provides.
+  host-tests:
+    name: host tests (BER + USM)
+    runs-on: [self-hosted, opencode-sam, esp32-snmpv3]
+    container:
+      image: archlinux:base-devel
+      volumes:
+        - /home/github-runner/ci-cache/pacman-pkg:/var/cache/pacman/pkg
+        - /home/github-runner/ci-cache/locks:/ci/cache/locks
+    steps:
+      - name: Install git (reused from the local pacman cache)
+        run: |
+          flock /ci/cache/locks/pacman.lock \
+            pacman -Syu --noconfirm --needed --overwrite '*' git
+
+      - uses: actions/checkout@v4
+
       - name: Run host test suite
         run: tests/host/run_host_tests.sh
