@@ -10,9 +10,47 @@ on:
   pull_request: {}
   workflow_dispatch: {}
 
+# ---------------------------------------------------------------------------
+# Everything below is reused from the runner's own disk. On the runner host,
+# /home/github-runner/ci-cache holds:
+#
+#   pacman-pkg    Arch packages (git for checkout)
+#   arduino-tools pinned arduino-cli binary
+#   arduino15     arduino-cli DATA dir: ESP32 core 3.3.12 + every toolchain
+#                 (esp-x32, esp-rv32, esp32{,s2,s3}-libs, esptool_py, ...)
+#   arduino       arduino-cli USER dir: sketchbook + the pinned sensor libraries
+#   arduino-build persistent per-(core, FQBN, example) build dirs
+#   locks         serialises every writer of the shared caches
+#
+# The version pins are what the caches were populated with: they are the cache
+# key. Bump one and only that object is re-fetched on the next run.
+#
+# The build dir is keyed by ESP32 core version as well as FQBN and example, so
+# bumping ESP32_CORE_VERSION automatically starts from a clean directory instead
+# of reusing objects compiled against the old core. Reuse is real: measured on
+# this runner, a repeat build of an unchanged sketch drops from ~36 s to ~9 s,
+# and even a fresh checkout (all-new mtimes) lands at ~16 s because the compiled
+# core archive is reused.
+#
+# NOTE ON SHARED STATE: the three matrix legs run concurrently on three
+# different runners and share all of the above. Nothing may mutate a path that
+# another leg reads. In particular the library under test is NOT copied into the
+# sketchbook -- it is referenced from the per-job checkout with `--library`.
+# (An earlier revision did copy it into the shared sketchbook, and the legs then
+# deleted the sources out from under each other mid-compile:
+# "cc1plus: fatal error: .../src/SnmpV3Agent.cpp: No such file or directory".)
+# ---------------------------------------------------------------------------
+
+env:
+  ARDUINO_CLI_VERSION: 1.5.1
+  ESP32_CORE_VERSION: 3.3.12
+  DHT_SENSOR_LIBRARY_VERSION: 1.4.7
+  ADAFRUIT_UNIFIED_SENSOR_VERSION: 1.1.15
+
 jobs:
   build:
-    runs-on: ubuntu-latest
+    name: build (${{ matrix.fqbn }})
+    runs-on: [self-hosted, opencode-sam, esp32-snmpv3]
     strategy:
       fail-fast: false
       matrix:
@@ -20,40 +58,83 @@ jobs:
           - esp32:esp32:esp32     # classic ESP32
           - esp32:esp32:esp32s3   # ESP32-S3
           - esp32:esp32:esp32s2   # ESP32-S2
+    container:
+      image: archlinux:base-devel
+      volumes:
+        - /home/github-runner/ci-cache/pacman-pkg:/var/cache/pacman/pkg
+        - /home/github-runner/ci-cache/locks:/ci/cache/locks
+        - /home/github-runner/ci-cache/arduino-tools:/ci/cache/arduino-tools
+        - /home/github-runner/ci-cache/arduino15:/ci/cache/arduino15
+        - /home/github-runner/ci-cache/arduino:/ci/cache/arduino
+        - /home/github-runner/ci-cache/arduino-build:/ci/cache/arduino-build
+    env:
+      ARDUINO_DIRECTORIES_DATA: /ci/cache/arduino15
+      ARDUINO_DIRECTORIES_USER: /ci/cache/arduino
     steps:
+      # actions/checkout shells out to git, which the bare base-devel image does
+      # not ship. The package itself is already in the mounted pacman cache.
+      - name: Install git (reused from the local pacman cache)
+        run: |
+          flock /ci/cache/locks/pacman.lock \
+            pacman -Syu --noconfirm --needed --overwrite '*' git
+
       - uses: actions/checkout@v4
 
-      - uses: arduino/setup-arduino-cli@v2
-        with:
-          # Gitea injects a Gitea token as github.token; GitHub API rejects it.
-          # Pass the real GitHub token (stored as Actions secret GH_TOKEN).
-          token: ${{ secrets.GH_TOKEN }}
-
-      - name: Free disk space (runner bloat vs. the ~10 GB ESP32 toolchain set)
+      - name: Reuse the pinned arduino-cli
         run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
-            /usr/local/.ghcup /opt/hostedtoolcache/CodeQL || true
-          df -h / | tail -1
+          set -euo pipefail
+          bin=/ci/cache/arduino-tools/arduino-cli
+          if [ ! -x "$bin" ]; then
+            curl -fsSL -o /tmp/arduino-cli.tgz \
+              "https://github.com/arduino/arduino-cli/releases/download/v${ARDUINO_CLI_VERSION}/arduino-cli_${ARDUINO_CLI_VERSION}_Linux_64bit.tar.gz"
+            tar xzf /tmp/arduino-cli.tgz -C /ci/cache/arduino-tools arduino-cli
+            rm -f /tmp/arduino-cli.tgz
+          fi
+          echo /ci/cache/arduino-tools >> "$GITHUB_PATH"
+          "$bin" version
 
-      - name: Register the Espressif (arduino-esp32) platform
-        run: arduino-cli config add board_manager.additional_urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
-
-      - name: Install ESP32 core v3.x + sensor library
+      - name: Reuse the pinned ESP32 core + sensor libraries
         run: |
-          arduino-cli core update-index
-          arduino-cli core install esp32:esp32
-          arduino-cli lib install "DHT sensor library"   # Adafruit; deps auto-resolved (Adafruit Unified Sensor)
+          set -euo pipefail
+          # The Espressif board index has to be registered before the core can be
+          # resolved. Writing the file is idempotent and keeps the setting inside
+          # the cache, instead of appending a duplicate URL on every run the way
+          # `arduino-cli config add` would.
+          cat > "$ARDUINO_DIRECTORIES_DATA/arduino-cli.yaml" <<'YAML'
+          board_manager:
+            additional_urls:
+              - https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          YAML
+          # On a cold cache all three legs would install into the same DATA and
+          # USER dirs at once, so hold the shared lock while they do.
+          flock /ci/cache/locks/arduino.lock bash -euo pipefail -c '
+            arduino-cli core install "esp32:esp32@${ESP32_CORE_VERSION}"
+            arduino-cli lib install "DHT sensor library@${DHT_SENSOR_LIBRARY_VERSION}"
+            arduino-cli lib install "Adafruit Unified Sensor@${ADAFRUIT_UNIFIED_SENSOR_VERSION}"
+          '
+          arduino-cli core list
+          arduino-cli lib list
 
-      # SHA-pinned 2026-09-29: the upstream repo has no version tags (the
-      # floating @v1 ref does not resolve and fails the job at 'Set up job').
-      # The action runs in Docker with its own home: runner-side lib installs
-      # are invisible, so library deps must come through the `libraries` input
-      # (source-path ./ installs THIS repo as the library under test).
-      - name: Compile all examples
-        uses: arduino/actions/libraries/compile-examples@3a9ca335ba366215f4dcc195794585ae625c859f
-        with:
-          fqbn: ${{ matrix.fqbn }}
-          libraries: |
-            - source-path: ./
-            - name: DHT sensor library
-            - name: Adafruit Unified Sensor
+      # The upstream compile-examples action ran in Docker with its own home, so
+      # it installed this repo as the library under test through its `libraries`
+      # input. Running arduino-cli directly, the equivalent is `--library`, which
+      # points the resolver at the checkout without touching any shared path.
+      - name: Compile every example for ${{ matrix.fqbn }}
+        run: |
+          set -euo pipefail
+          fqbn='${{ matrix.fqbn }}'
+          for sketch in "$GITHUB_WORKSPACE"/examples/*/; do
+            example=$(basename "$sketch")
+            build="/ci/cache/arduino-build/${ESP32_CORE_VERSION}/${fqbn}/${example}"
+            echo "::group::$example @ $fqbn"
+            # Two runs of the same leg can overlap (a PR update racing a push to
+            # main), so serialise them rather than have them write one build dir
+            # at the same time. Three legs share a 16-core host, hence --jobs 4
+            # rather than letting every leg claim all 16 cores.
+            flock "/ci/cache/locks/arduino-build-${ESP32_CORE_VERSION}-${fqbn}-${example}.lock" \
+              arduino-cli compile --fqbn "$fqbn" --jobs 4 \
+                --library "$GITHUB_WORKSPACE" \
+                --build-path "$build" \
+                "$sketch"
+            echo "::endgroup::"
+          done
