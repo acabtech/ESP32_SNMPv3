@@ -1,0 +1,51 @@
+name: Release
+
+# On every annotated tag push that looks like a semver release,
+# create a GitHub Release with the matching CHANGELOG section as
+# the release notes.  Draft and prerelease tags (vX.Y.Z-rc*, etc.)
+# are created as drafts so they can be promoted by editing the
+# release on GitHub.
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract changelog section
+        id: changelog
+        run: |
+          tag="${GITHUB_REF#refs/tags/}"
+          # Find the section [X.Y.Z] in CHANGELOG.md and extract its body
+          # up to the next section heading or end of file.
+          body=$(sed -n "/^## \\[${tag}\\]/,/^## \\[/{ /^## /d; p; }" CHANGELOG.md | sed '/^$/d')
+          # Escape for JSON
+          body_json=$(printf '%s' "$body" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))')
+          echo "body=$body_json" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Determine if prerelease
+        id: prerelease
+        run: |
+          tag="${{ steps.changelog.outputs.tag }}"
+          if [[ "$tag" == *-rc* || "$tag" == *-alpha* || "$tag" == *-beta* ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.changelog.outputs.tag }}
+          name: ESP32-SNMPv3-Agent ${{ steps.changelog.outputs.tag }}
+          body: ${{ steps.changelog.outputs.body }}
+          draft: false
+          prerelease: ${{ steps.prerelease.outputs.prerelease }}
