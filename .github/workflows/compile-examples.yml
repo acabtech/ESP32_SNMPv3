@@ -18,9 +18,9 @@ on:
 #   arduino-tools pinned arduino-cli binary
 #   arduino15     arduino-cli DATA dir: ESP32 core 3.3.12 + every toolchain
 #                 (esp-x32, esp-rv32, esp32{,s2,s3}-libs, esptool_py, ...)
-#   arduino       arduino-cli USER dir: sketchbook + the sensor libraries
+#   arduino       arduino-cli USER dir: sketchbook + the pinned sensor libraries
 #   arduino-build persistent per-(core, FQBN, example) build dirs
-#   locks         serialises pacman between the parallel runners
+#   locks         serialises every writer of the shared caches
 #
 # The version pins are what the caches were populated with: they are the cache
 # key. Bump one and only that object is re-fetched on the next run.
@@ -31,6 +31,14 @@ on:
 # this runner, a repeat build of an unchanged sketch drops from ~36 s to ~9 s,
 # and even a fresh checkout (all-new mtimes) lands at ~16 s because the compiled
 # core archive is reused.
+#
+# NOTE ON SHARED STATE: the three matrix legs run concurrently on three
+# different runners and share all of the above. Nothing may mutate a path that
+# another leg reads. In particular the library under test is NOT copied into the
+# sketchbook -- it is referenced from the per-job checkout with `--library`.
+# (An earlier revision did copy it into the shared sketchbook, and the legs then
+# deleted the sources out from under each other mid-compile:
+# "cc1plus: fatal error: .../src/SnmpV3Agent.cpp: No such file or directory".)
 # ---------------------------------------------------------------------------
 
 env:
@@ -97,39 +105,36 @@ jobs:
             additional_urls:
               - https://espressif.github.io/arduino-esp32/package_esp32_index.json
           YAML
-          arduino-cli core install "esp32:esp32@${ESP32_CORE_VERSION}"
-          arduino-cli lib install "DHT sensor library@${DHT_SENSOR_LIBRARY_VERSION}"
-          arduino-cli lib install "Adafruit Unified Sensor@${ADAFRUIT_UNIFIED_SENSOR_VERSION}"
+          # On a cold cache all three legs would install into the same DATA and
+          # USER dirs at once, so hold the shared lock while they do.
+          flock /ci/cache/locks/arduino.lock bash -euo pipefail -c '
+            arduino-cli core install "esp32:esp32@${ESP32_CORE_VERSION}"
+            arduino-cli lib install "DHT sensor library@${DHT_SENSOR_LIBRARY_VERSION}"
+            arduino-cli lib install "Adafruit Unified Sensor@${ADAFRUIT_UNIFIED_SENSOR_VERSION}"
+          '
           arduino-cli core list
           arduino-cli lib list
 
       # The upstream compile-examples action ran in Docker with its own home, so
       # it installed this repo as the library under test through its `libraries`
-      # input. Running arduino-cli directly, we do the same thing explicitly:
-      # drop the checkout into the cached sketchbook under the name declared in
-      # library.properties.
-      - name: Install this library into the cached sketchbook
-        run: |
-          set -euo pipefail
-          name=$(sed -n 's/^name=//p' "$GITHUB_WORKSPACE/library.properties")
-          lib="$ARDUINO_DIRECTORIES_USER/libraries/$name"
-          rm -rf "$lib"
-          mkdir -p "$(dirname "$lib")"
-          cp -a "$GITHUB_WORKSPACE" "$lib"
-          echo "library under test: $lib"
-
+      # input. Running arduino-cli directly, the equivalent is `--library`, which
+      # points the resolver at the checkout without touching any shared path.
       - name: Compile every example for ${{ matrix.fqbn }}
         run: |
           set -euo pipefail
-          name=$(sed -n 's/^name=//p' "$GITHUB_WORKSPACE/library.properties")
-          lib="$ARDUINO_DIRECTORIES_USER/libraries/$name"
           fqbn='${{ matrix.fqbn }}'
-          for sketch in "$lib"/examples/*/; do
+          for sketch in "$GITHUB_WORKSPACE"/examples/*/; do
             example=$(basename "$sketch")
             build="/ci/cache/arduino-build/${ESP32_CORE_VERSION}/${fqbn}/${example}"
             echo "::group::$example @ $fqbn"
-            # Three matrix legs share a 16-core host, so cap each at 4 parallel
-            # compiles rather than letting every leg claim all 16.
-            arduino-cli compile --fqbn "$fqbn" --jobs 4 --build-path "$build" "$sketch"
+            # Two runs of the same leg can overlap (a PR update racing a push to
+            # main), so serialise them rather than have them write one build dir
+            # at the same time. Three legs share a 16-core host, hence --jobs 4
+            # rather than letting every leg claim all 16 cores.
+            flock "/ci/cache/locks/arduino-build-${ESP32_CORE_VERSION}-${fqbn}-${example}.lock" \
+              arduino-cli compile --fqbn "$fqbn" --jobs 4 \
+                --library "$GITHUB_WORKSPACE" \
+                --build-path "$build" \
+                "$sketch"
             echo "::endgroup::"
           done
