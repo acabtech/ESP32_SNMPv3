@@ -1,4 +1,4 @@
-# ESP32-SNMPv3-Agent
+# ESP32-SNMPv3
 
 SNMPv3 (**USM, authPriv**) agent for **ESP32 / ESP32-S2 / ESP32-S3** sensor
 telemetry over Wi-Fi.
@@ -9,7 +9,6 @@ If you need SNMP v1/v2c there are other alternative libraries to use:
 - https://github.com/0neblock/Arduino_SNMP
 - https://github.com/syntax1269/SNMP_Embedded
 
-![CI](https://img.shields.io/github/actions/workflow/status/acabtech/esp32-snmpv3-agent/ci.yml?label=lint%2Ftests)
 ![License](https://img.shields.io/badge/license-GPL--3.0-blue)
 ![Arduino Library Manager](https://img.shields.io/badge/Arduino-Library%20Manager-00979D?logo=arduino)
 ![SNMPv3](https://img.shields.io/badge/SNMPv3-authPriv%20only-informational)
