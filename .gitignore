@@ -63,3 +63,6 @@ Testing/
 .cache/
 
 plans/
+
+# Private, machine-local secrets + hardware scripts (never commit)
+priv/

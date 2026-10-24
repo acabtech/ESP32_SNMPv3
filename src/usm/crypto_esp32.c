@@ -26,6 +26,12 @@ void crypto_sha256_init(CryptoSha256Ctx* ctx) {
   mbedtls_sha256_context* m =
       (mbedtls_sha256_context*)&ctx->blob[0];
   mbedtls_sha256_init(m);
+  // mbedtls_sha256_init() only zeroes the context; mbedtls_sha256_starts()
+  // is what loads the SHA-256 IV into state[]. Without it every incremental
+  // hash (key localization + HMAC) runs from a zeroed state and produces a
+  // wrong digest — the agent then rejects all authenticated requests with
+  // usmStatsWrongDigests. is224 = 0 selects SHA-256.
+  mbedtls_sha256_starts(m, 0);
 }
 
 void crypto_sha256_update(CryptoSha256Ctx* ctx, const uint8_t* in, size_t len) {

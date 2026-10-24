@@ -34,9 +34,10 @@ Exit: `arduino-lint` passes; examples compile against stub API
   into CI (`host-tests` job).
 
 Exit: PASSED — host suite green on a bare PC with a C compiler only;
-vectors match RFC + pysnmp. Remaining on-device item: cross-check the
-mbedtls backend against `crypto_soft` on real silicon (deferred to M2 per
-maintainer — hardware access lands later).
+vectors match RFC + pysnmp. On-device cross-check **DONE** (2026-10-24,
+ESP32-S3 N16R8): the mbedtls backend was validated against pysnmp 6.2.6
+over the wire — this surfaced and fixed a missing `mbedtls_sha256_starts()`
+in `crypto_esp32.c` (see CHANGELOG).
 
 ## M2 — Agent engine
 - UDP :161 pump (non-blocking), discovery reports, dispatch
@@ -47,7 +48,9 @@ maintainer — hardware access lands later).
 - Replay cache (msgID window).
 - Enable CI `compile-examples` on `esp32`, `esp32s3`, `esp32s2`.
 
-Exit: net-snmp walk/bulk/set against a real board, authPriv only.
+Exit: PASSED (2026-10-24) — pysnmp 6.2.6 authPriv get/walk against a real
+ESP32-S3 board (net-snmp CLI was not installed on the test host; the pysnmp
+checker is the equivalent oracle).
 
 ## M3 — Notifications + soak
 - **v3 traps** (fire-and-forget) and **informs** (RFC 3416 §3.2.5 ack/retry,

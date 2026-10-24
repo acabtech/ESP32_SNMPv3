@@ -15,8 +15,14 @@
 #include <WiFi.h>
 #include <SnmpV3Agent.h>
 
+// Injected at build time from priv/secrets.env (see priv/flash.sh); the
+// CHANGE_ME defaults keep the shipped example self-contained.
+#ifndef WIFI_SSID
 #define WIFI_SSID "CHANGE_ME"
+#endif
+#ifndef WIFI_PASS
 #define WIFI_PASS "CHANGE_ME"
+#endif
 
 #define OID_UPTIME  "1.3.6.1.4.1.67018.2.1.0"
 #define OID_FREEHEAP "1.3.6.1.4.1.67018.2.1.1"

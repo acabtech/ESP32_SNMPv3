@@ -2,6 +2,35 @@
 
 All notable changes to ESP32-SNMPv3-Agent. Format: Keep a Changelog 1.1.
 
+## [0.1.1] — 2026-10-24
+
+### Added (hardware test tooling, 2026-10-24)
+- `tests/hardware/serial_capture.py`: configurable USB-serial console
+  capture (port/baud/duration/expect, optional reset) for on-device tests.
+- `priv/` (gitignored): machine-local secrets + scripts. `priv/secrets.env`
+  holds Wi-Fi, SNMPv3, board, and Zabbix credentials; `priv/flash.sh`
+  injects the Wi-Fi SSID/passphrase at build time via `-D` (the example now
+  guards `WIFI_SSID`/`WIFI_PASS` with `#ifndef`), `priv/poll.sh` drives the
+  pysnmp checker, and `priv/zbx_setup.py` registers the host + items in
+  Zabbix 8.0 via the API (Bearer-token auth, SNMP interface `interfaceid`).
+
+### Verified (Zabbix 8.0 interop, 2026-10-24)
+- ESP32-S3 (N16R8) answers SNMPv3 authPriv (SHA-256 + AES-128) from both the
+  build host and the Zabbix VM across the IoT VLAN boundary; Zabbix 8.0
+  collects `app.uptime` / `app.freeheap` with no errors.
+
+### Fixed (on-device hardware validation, 2026-10-24)
+- `src/usm/crypto_esp32.c`: `crypto_sha256_init()` called
+  `mbedtls_sha256_init()` but never `mbedtls_sha256_starts()`, so the
+  incremental SHA-256 ran from a zeroed state (no IV loaded). Every
+  localized key and HMAC computed on real silicon was therefore wrong, and
+  the agent rejected all authenticated requests with `usmStatsWrongDigests`
+  (surfaced to the manager as "Wrong SNMP PDU digest"). Found by the first
+  on-device interop test (ESP32-S3 N16R8, pysnmp 6.2.6 authPriv); fixed by
+  calling `mbedtls_sha256_starts(m, 0)` in `crypto_sha256_init()`. The host
+  suite (which links `crypto_soft`) could not catch this — the device-only
+  crypto seam is now validated on hardware.
+
 ## [0.1.0] — 2026-10-23
 
 ### Changed
