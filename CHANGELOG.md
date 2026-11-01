@@ -2,6 +2,56 @@
 
 All notable changes to ESP32-SNMPv3-Agent. Format: Keep a Changelog 1.1.
 
+## [0.1.2] — 2026-11-01
+
+### Fixed (Arduino Library Manager submission)
+- `library.properties`: `url=` now points at the actual repository
+  (`https://github.com/acabtech/ESP32_SNMPv3`). The previous value
+  (`.../esp32-snmpv3-agent`) returned 404 to arduino-lint (LP042), which would
+  have blocked Library Manager acceptance. This is the reason for the 0.1.2
+  release: the v0.1.1 tag carried the broken URL.
+- Added [`src/ESP32-SNMPv3-Agent.h`](src/ESP32-SNMPv3-Agent.h), a forwarding
+  header whose filename matches `name=` in `library.properties`, clearing the
+  arduino-lint LS008 best-practice warning.
+- `library.properties`: added `includes=SnmpV3Agent.h` so IDEs resolve the
+  public API header explicitly.
+
+### Added (submission tooling + docs)
+- `docs/SUBMISSION.md`: the end-to-end Library Manager checklist — registry
+  requirements, pre-flight lint/tests, release tagging, the exact
+  `arduino/library-registry` pull request, post-acceptance verification, and
+  common rejection causes.
+- CI lint job now runs `arduino-lint --library-manager submit` instead of
+  `--library-manager false`, so the Library Manager acceptance rules (including
+  the `url=` check) gate every push/PR.
+- Corrected the release process in `CONTRIBUTING.md` and `docs/ROADMAP.md`:
+  there is no `arduino-cli lib publish` subcommand; submission is a pull
+  request (or web form) against `arduino/library-registry`.
+
+### Fixed (examples)
+- `examples/dht22_telemetry` and `examples/trap_notification` now guard
+  their Wi-Fi credentials / trap-manager IP with `#ifndef`, matching
+  `minimal_authpriv`, so the documented `priv/flash.sh` `-D` build-time
+  injection works without macro-redefinition warnings.
+- Removed stale "(M0 scaffold)" / "core not built yet" startup messages from
+  the examples; a `begin()` failure now reports "check Wi-Fi/NVS".
+
+### Documentation (this rev)
+- `README.md`: install section now states that the Library Manager
+  submission is pending and offers `arduino-cli lib install --git-url` as the
+  works-today path; documents both `<SnmpV3Agent.h>` and
+  `<ESP32-SNMPv3-Agent.h>` as equivalent public headers.
+- `docs/GETTING-STARTED.md`: same install guidance and the
+  `ESP32-SNMPv3-Agent` library-folder name.
+- `src/README.md`: module table includes the new forwarding header and links
+  the submission guide.
+- `docs/DESIGN.md`: open item now confirms the public repository
+  (`acabtech/ESP32_SNMPv3`) and lists the registry PR / soak as the only
+  outstanding work.
+- `docs/ROADMAP.md`: M4 exit criteria reflect the local `v0.1.2` tag and the
+  remaining push + registry PR.
+- `tests/host/README.md`: documents the current 2,783-check suite.
+
 ## [0.1.1] — 2026-10-24
 
 ### Added (hardware test tooling, 2026-10-24)

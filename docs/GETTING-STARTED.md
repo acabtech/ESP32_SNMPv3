@@ -22,10 +22,16 @@ No PSRAM is required — the agent runs entirely in the chip's SRAM.
 2. Install the library:
 
    ```bash
+   # From Git — works today
+   arduino-cli lib install --git-url https://github.com/acabtech/ESP32_SNMPv3.git
+
+   # From the Library Manager — after the registry submission is accepted
    arduino-cli lib install ESP32-SNMPv3-Agent
    ```
 
-   Or copy this repo into `~/Arduino/libraries/esp32-snmpv3-agent`.
+   Or copy this repository into `~/Arduino/libraries/ESP32-SNMPv3-Agent`.
+   The Library Manager status and submission steps are in
+   [`SUBMISSION.md`](SUBMISSION.md).
 
 3. Open the flagship example and edit the settings **before** flashing:
 

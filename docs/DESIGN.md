@@ -1,12 +1,12 @@
 # Design — ESP32-SNMPv3-Agent
 
-Status: **M0..M4 (repo-side) landed** (scaffold; codec/USM core host-tested;
-agent engine + NVS persistence; v3 traps/informs + retry state machine; docs
-pass + registry metadata + capstone kit + pysnmp mock agent). The on-device
-soak, the Library Manager submission, and the semver tag are
-maintainer/hardware-gated. Interfaces below are the v0.1 contract; the
-numbered "scope lock" reflects decisions approved by the maintainer
-(2026-09-29).
+Status: **M0..M4 (repo-side) landed, submission-ready** (codec/USM core
+host-tested; agent engine + NVS persistence; v3 traps/informs + retry
+state machine; docs pass + registry metadata + capstone kit + pysnmp mock
+agent; `arduino-lint --library-manager submit` clean; v0.1.2 tagged). The
+on-device soak and the Library Manager registry PR are maintainer/hardware
+gated. Interfaces below are the v0.1 contract; the numbered "scope lock"
+reflects decisions approved by the maintainer (2026-09-29).
 
 ## 1. Scope lock (v0.1)
 
@@ -115,11 +115,16 @@ sub-millisecond on the hardware engines, non-blocking in `loop()`.
 
 - [x] **IANA PEN 67018** — granted; example/enterprise OID root is
       `enterprises.67018` = `1.3.6.1.4.1.67018` throughout the codebase.
-- [x] GPL **`only`** confirmed (SPDX `GPL-3.0`).
+- [x] GPL **`only`** confirmed (SPDX `GPL-3.0-only` in `library.properties`).
 - [x] pysnmp oracle pinned to **6.2.6** (SHA-2 auth protocol via
       `pysnmp.proto.secmod.rfc7860`; hlapi sync facade retained).
-- [ ] Confirm GitHub org/account for the public repo
-      (currently `acabtech/esp32-snmpv3-agent`, private; pushes via the
-      `hamoodify` gh account).
+- [x] Public repository confirmed: **`acabtech/ESP32_SNMPv3`**
+      (`https://github.com/acabtech/ESP32_SNMPv3`). The stale
+      `esp32-snmpv3-agent` URL was removed from `library.properties` in
+      v0.1.2 (it 404'd for arduino-lint LP042).
+- [ ] Library Manager registry PR (`arduino/library-registry`) — maintainer
+      action; steps in [`SUBMISSION.md`](SUBMISSION.md).
 - [ ] Verify net-snmp SHA-256 availability on Debian's build (must be ≥ 5.8
       with SHA-2 enabled) — affects the interop runbook, not the library.
+- [ ] On-device soak (48 h Zabbix + trap storm + power-cycle ×50) — the
+      remaining M3 hardware-gated exit criterion.

@@ -70,7 +70,7 @@ jobs:
           fi
           "$bin" --version
 
-      - name: arduino-lint (Arduino Library specification compliance)
+      - name: arduino-lint (specification + Library Manager acceptance rules)
         run: |
           set -euo pipefail
           # arduino-lint derives part of the specification from the project
@@ -78,6 +78,13 @@ jobs:
           # revision effectively passed. Lint the library under the name that
           # library.properties declares, the same name the compile job installs
           # it as, so this stays correct if the repository is ever renamed.
+          #
+          # `--library-manager submit` enables the additional rules that must
+          # pass before the library is accepted into the official Arduino
+          # Library Manager index (it also validates the library.properties
+          # `url=` field). Once the library is accepted, switch this to
+          # `--library-manager update` (new-release rules). See
+          # docs/SUBMISSION.md.
           name=$(sed -n 's/^name=//p' "$GITHUB_WORKSPACE/library.properties")
           root=/tmp/arduino-lint
           rm -rf "$root"
@@ -85,7 +92,7 @@ jobs:
           cp -a "$GITHUB_WORKSPACE" "$root/$name"
           /ci/cache/arduino-tools/arduino-lint \
             --compliance specification \
-            --library-manager false \
+            --library-manager submit \
             --project-type library \
             "$root/$name"
 

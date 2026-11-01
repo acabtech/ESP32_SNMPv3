@@ -40,7 +40,7 @@ void setup() {
   Serial.printf("\nWi-Fi connected: %s\n", WiFi.localIP().toString().c_str());
 
   if (!SNMPv3.begin()) {
-    Serial.println("[SNMP] agent failed to start (M0 scaffold)");
+    Serial.println("[SNMP] agent failed to start (check Wi-Fi/NVS)");
     return;
   }
   SNMPv3.addUser("smoke", "auth-passphrase", "priv-passphrase");

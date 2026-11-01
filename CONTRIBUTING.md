@@ -48,13 +48,26 @@ PT Alat Cerdas Adikarya Bersama).
 
 ## Release process (maintainer)
 
-1. Update `CHANGELOG.md` — move `[Unreleased]` to `[0.1.0]` (or next semver).
-2. Verify `arduino-lint` passes (specification compliance).
-3. Tag the release: `git tag v0.1.0 && git push --tags`.
-4. Submit to the Arduino Library Manager:
-   `arduino-cli lib publish --library .` (requires a Library Manager account).
-5. Update the README status table and badge URLs if needed.
-6. Push to the `acabtech/esp32-snmpv3-agent` GitHub repo.
+The canonical, step-by-step checklist is [`docs/SUBMISSION.md`](docs/SUBMISSION.md).
+
+1. Update `CHANGELOG.md` — move `[Unreleased]` to the next semver section.
+2. Bump `version=` in `library.properties` to the same semver.
+3. Run the gates locally:
+   - `tests/host/run_host_tests.sh` (host suite green);
+   - `arduino-cli compile` for `esp32`, `esp32s2`, `esp32s3` on every example;
+   - `arduino-lint --compliance specification --library-manager submit
+     --project-type library <copy-of-repo-named-ESP32-SNMPv3-Agent>`.
+4. Commit, then tag and push: `git tag vX.Y.Z && git push origin main --tags`.
+5. Submit to the Arduino Library Manager by opening a pull request against
+   [`arduino/library-registry`](https://github.com/arduino/library-registry)
+   that adds the repository URL (`https://github.com/acabtech/ESP32_SNMPv3`)
+   to `repositories.txt` — or use the form at
+   <https://librarymanager.arduino.cc/>. There is **no** `arduino-cli lib
+   publish` subcommand; the registry PR (or form) is the submission.
+6. After the registry bot's `arduino-lint` check passes and the PR is merged,
+   the nightly index update makes the library installable:
+   `arduino-cli lib update-index && arduino-cli lib search ESP32-SNMPv3-Agent`.
+7. Update the README status table and badge URLs if needed.
 
 ## License
 

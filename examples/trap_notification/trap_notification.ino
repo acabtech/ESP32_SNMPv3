@@ -20,15 +20,25 @@
 #include <WiFi.h>
 #include <SnmpV3Agent.h>
 
+// Injected at build time from priv/secrets.env (see priv/flash.sh); the
+// CHANGE_ME defaults keep the shipped example self-contained.
+#ifndef WIFI_SSID
 #define WIFI_SSID "CHANGE_ME"
+#endif
+#ifndef WIFI_PASS
 #define WIFI_PASS "CHANGE_ME"
+#endif
 
 #define BTN_PIN   18
 #define OID_BTN   "1.3.6.1.4.1.67018.2.2.0"
 
 // Manager that should receive v3 traps/informs (UDP :162).
-// Replace with the NMS IP on your network (e.g. your Zabbix or PC).
-IPAddress TRAP_MANAGER(192, 168, 1, 10);
+// Injected at build time from priv/secrets.env (TRAP_MANAGER_IP); the default
+// keeps the shipped example self-contained.
+#ifndef TRAP_MANAGER_IP
+#define TRAP_MANAGER_IP "192.168.1.10"
+#endif
+IPAddress TRAP_MANAGER;
 
 void setup() {
   Serial.begin(115200);
@@ -45,9 +55,11 @@ void setup() {
     Serial.println("[SNMP] agent failed to start");
     return;
   }
+  TRAP_MANAGER.fromString(TRAP_MANAGER_IP);
   SNMPv3.addUser("telemetry", "auth-passphrase", "priv-passphrase");
   SNMPv3.setTrapManager(TRAP_MANAGER);
-  Serial.println("[SNMP] agent ready — press the button to fire a v3 trap");
+  Serial.printf("[SNMP] agent ready — trap manager %s — press the button to fire a v3 trap\n",
+                TRAP_MANAGER.toString().c_str());
 }
 
 void loop() {

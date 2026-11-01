@@ -9,6 +9,7 @@ If you need SNMP v1/v2c there are other alternative libraries to use:
 - https://github.com/0neblock/Arduino_SNMP
 - https://github.com/syntax1269/SNMP_Embedded
 
+![CI](https://img.shields.io/github/actions/workflow/status/acabtech/ESP32_SNMPv3/ci.yml?label=lint%2Ftests)
 ![License](https://img.shields.io/badge/license-GPL--3.0-blue)
 ![Arduino Library Manager](https://img.shields.io/badge/Arduino-Library%20Manager-00979D?logo=arduino)
 ![SNMPv3](https://img.shields.io/badge/SNMPv3-authPriv%20only-informational)
@@ -49,7 +50,7 @@ for the no-jargon primer.
 | M1 | BER codec + USM keys/crypto core (host-tested vs RFC vectors) | ✅ |
 | M2 | Agent engine: dispatch, MIB tree, Get/GetNext/GetBulk/Set; NVS engine state | ✅ |
 | M3 | v3 traps + informs (code + host tests); on-device soak | 🟡 code landed, soak pending |
-| M4 | Docs pass, CONTRIBUTING, changelog, registry submission, capstone kit | 🟡 repo-side landed, submission pending |
+| M4 | Docs pass, CONTRIBUTING, changelog, registry submission, capstone kit | 🟡 submission-ready, Library Manager PR pending |
 
 > **New here?** Read the [Getting Started guide](docs/GETTING-STARTED.md) — the
 > single end-to-end walkthrough: flash → poll → Zabbix → Home Assistant → traps
@@ -57,18 +58,28 @@ for the no-jargon primer.
 
 ## Install & quick start
 
-1. Install the library from the Arduino Library Manager
-   (search *ESP32-SNMPv3-Agent*), or copy this repo into
-   `~/Arduino/libraries/esp32-snmpv3-agent`:
+> **Library Manager status:** the registry submission is in progress — see
+> [Library Manager submission](docs/SUBMISSION.md). Once the
+> `arduino/library-registry` PR is merged, the `arduino-cli lib install` form
+> below starts working from the nightly index.
+
+1. Install the library (any one of these):
 
    ```bash
+   # From Git — works today
+   arduino-cli lib install --git-url https://github.com/acabtech/ESP32_SNMPv3.git
+
+   # From the Arduino Library Manager — after the registry PR is merged
    arduino-cli lib install ESP32-SNMPv3-Agent
    ```
 
-2. The whole API is three calls:
+   Or copy this repository into `~/Arduino/libraries/ESP32-SNMPv3-Agent`.
+
+2. The whole API is three calls. Both the public header and the
+   library-name header resolve to the same declarations:
 
    ```cpp
-   #include <SnmpV3Agent.h>
+   #include <SnmpV3Agent.h>          // or <ESP32-SNMPv3-Agent.h>
 
    SNMPv3.begin();
    SNMPv3.addUser("telemetry", "auth-passphrase", "priv-passphrase");
@@ -130,6 +141,7 @@ Flagship example: **DHT22 → pin 4**. The entire agent runs in the chip's SRAM.
 | [Roadmap](docs/ROADMAP.md) | Milestones + exit criteria |
 | [src/README](src/README.md) | Module layout + API reference |
 | [tests/host/README](tests/host/README.md) | Host test suite |
+| [Library Manager submission](docs/SUBMISSION.md) | Registry requirements + exact submission steps |
 | [CONTRIBUTING](CONTRIBUTING.md) | Workflow, testing, release process |
 
 ## License

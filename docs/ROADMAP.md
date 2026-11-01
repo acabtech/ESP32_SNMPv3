@@ -1,9 +1,9 @@
 # Roadmap
 
-Milestones with exit criteria. Current position: **M4 repo-side landed**
-(2026-10-23, docs pass + CONTRIBUTING + changelog + registry metadata +
-capstone kit + pysnmp mock agent; the Library Manager submission, semver tag,
-and the M3 on-device soak remain maintainer/hardware-gated, see below).
+Milestones with exit criteria. Current position: **M4 submission-ready**
+(2026-11-01: registry metadata corrected, `arduino-lint --library-manager
+submit` clean, release tagged; opening the `arduino/library-registry` PR and
+the M3 on-device soak remain maintainer/hardware-gated, see below).
 
 ## M0 — Scaffold (✅)
 - Repo structure per Arduino library spec, `library.properties`, GPL-3.0
@@ -72,11 +72,18 @@ its host tests are complete.
   with the capstone demo folded in; interop runbooks remain the per-manager
   deep dives.
 - CONTRIBUTING final — ✅ testing, PR checklist, release process, license.
-- Changelog — ✅ `[0.1.0]` dated 2026-10-23 with the M4 section.
-- Semver tag — ⏳ maintainer action (`git tag v0.1.0`).
-- Registry submission (Arduino Library Manager) + badge — 🟡 badge added to
-  README; `library.properties` registry-ready; submission is a maintainer
-  action (`arduino-cli lib publish`).
+- Changelog — ✅ `[0.1.2]` dated 2026-11-01 with the submission-readiness
+  changes.
+- Semver tag — ✅ `v0.1.1`; `v0.1.2` tagged with the corrected registry
+  metadata (the v0.1.1 tag pointed `url=` at a stale repository).
+- Registry readiness — ✅ `library.properties` URL now points at the real
+  repository (`acabtech/ESP32_SNMPv3`), primary header
+  `src/ESP32-SNMPv3-Agent.h` added for LS008, `arduino-lint
+  --library-manager submit` is clean, and `docs/SUBMISSION.md` documents the
+  exact registry PR.
+- Registry submission (Arduino Library Manager) — 🟡 maintainer action: open
+  the `arduino/library-registry` PR (or use the web form). There is no
+  `arduino-cli lib publish` subcommand.
 - Capstone demo kit — ✅ folded into `docs/GETTING-STARTED.md` (DHT22 →
   SNMPv3 authPriv → Zabbix dashboard + HA card, wiring + BOM + firmware).
 - Marketing one-pager — ✅ folded into the README ("What it does" +
@@ -87,5 +94,6 @@ its host tests are complete.
   (pysnmp CommandResponder mimicking the board's OIDs + authPriv user).
 
 Exit: `arduino-cli lib install ESP32-SNMPv3-Agent` works for a stranger.
-Repo-side prerequisites are complete; the submission + tag are the only
-remaining maintainer actions.
+Repo-side prerequisites are complete and `v0.1.2` is tagged locally; the
+remaining maintainer actions are `git push origin main --tags` and the
+`arduino/library-registry` PR. See [`SUBMISSION.md`](SUBMISSION.md).

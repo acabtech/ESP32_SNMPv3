@@ -41,8 +41,14 @@
 #include <DHT.h>
 #include <SnmpV3Agent.h>
 
+// Injected at build time from priv/secrets.env (see priv/flash.sh); the
+// CHANGE_ME defaults keep the shipped example self-contained.
+#ifndef WIFI_SSID
 #define WIFI_SSID "CHANGE_ME"
+#endif
+#ifndef WIFI_PASS
 #define WIFI_PASS "CHANGE_ME"
+#endif
 
 #define DHT_PIN 4
 DHT dht(DHT_PIN, DHT22);
@@ -76,7 +82,7 @@ void setup() {
 
   // --- SNMPv3 agent (authPriv only: HMAC-SHA-256 + AES-128) ----------------
   if (!SNMPv3.begin()) {
-    Serial.println("[SNMP] agent failed to start (M0 scaffold — core not built yet)");
+    Serial.println("[SNMP] agent failed to start (check Wi-Fi/NVS)");
     return;
   }
 

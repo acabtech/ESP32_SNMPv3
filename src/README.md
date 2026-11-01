@@ -1,11 +1,15 @@
 # src/ — ESP32-SNMPv3-Agent library source
 
-Module layout — M0/M1 core landed (host-tested), M2 agent engine + NVS store
-in this rev; see docs/ROADMAP.md for exit status:
+Module layout — v0.1.2 is feature-complete for the v0.1 scope (BER + USM core
+host-tested, M2 agent engine + NVS store, M3 traps/informs) and is the
+Library Manager submission release. See
+[`docs/ROADMAP.md`](../docs/ROADMAP.md) for exit status and
+[`docs/SUBMISSION.md`](../docs/SUBMISSION.md) for registry requirements.
 
 | Path            | Responsibility                                      |
 |-----------------|-----------------------------------------------------|
 | `SnmpV3Agent.h` | Public API (final for v0.1) + Arduino-style singleton. |
+| `ESP32-SNMPv3-Agent.h` | Forwarding header whose filename matches `name=` in `library.properties` (arduino-lint LS008); both headers expose the same API. |
 | `SnmpV3Agent.cpp` | Agent state machine, UDP :161 pump, dispatch, NVS-backed store wiring. |
 | `ber/BER.h`     | ASN.1 BER codec primitives (host-compilable).       |
 | `usm/USM.h`     | RFC 3414/7860/3826: keys, HMAC-SHA-256, AES-128-CFB, timeliness. |
