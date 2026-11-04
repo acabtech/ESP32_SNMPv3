@@ -39,6 +39,27 @@ PT Alat Cerdas Adikarya Bersama).
 - [ ] No Arduino/ESP-IDF includes in `ber/`, `usm/`, `mib/` (host-testable core).
 - [ ] No dynamic allocation on the hot path.
 
+## Documentation site
+
+The docs are published with MkDocs Material at
+<https://acabtech.github.io/ESP32_SNMPv3/>. The canonical sources are `docs/`
+plus the READMEs in the repository root, `src/`, `tests/host/` and
+`tests/interop/`; `scripts/docs.py` stages them into one tree and rewrites
+cross-repo links before building.
+
+Local preview (Python 3.10+):
+
+```bash
+python3 -m venv .venv-docs
+. .venv-docs/bin/activate
+pip install -r requirements-docs.txt
+python scripts/docs.py serve     # http://127.0.0.1:8000/
+```
+
+`python scripts/docs.py build` runs the same strict build CI uses. Add new
+pages to the `nav:` in `mkdocs.yml`; `--strict` fails on pages that are missing
+from the nav or contain broken links.
+
 ## Coding style
 
 - 2-space indent, Allman braces, 80-column, `snake_case` for non-API

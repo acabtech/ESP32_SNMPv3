@@ -2,6 +2,18 @@
 
 All notable changes to ESP32-SNMPv3-Agent. Format: Keep a Changelog 1.1.
 
+## [Unreleased]
+
+### Added (documentation site)
+- Searchable MkDocs Material documentation site at
+  <https://acabtech.github.io/ESP32_SNMPv3/>, deployed to GitHub Pages by
+  `.github/workflows/docs.yml`.
+- `scripts/docs.py` stages `docs/` plus the root, `src/`, and `tests/` READMEs
+  into one tree and rewrites cross-repo links, so the site and GitHub stay in
+  sync without duplicated Markdown.
+- `docs/interop/index.md`: landing page for the Zabbix, Home Assistant, and
+  net-snmp runbooks.
+
 ## [0.1.2] — 2026-11-01
 
 ### Fixed (Arduino Library Manager submission)

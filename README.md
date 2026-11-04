@@ -132,6 +132,9 @@ Flagship example: **DHT22 → pin 4**. The entire agent runs in the chip's SRAM.
 
 ## Documentation
 
+The documentation is also published as a searchable site:
+<https://acabtech.github.io/ESP32_SNMPv3/>.
+
 | Doc | What's in it |
 |-----|--------------|
 | [Getting Started](docs/GETTING-STARTED.md) | End-to-end: flash → poll → Zabbix → HA → traps → troubleshooting |

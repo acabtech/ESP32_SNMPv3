@@ -1,0 +1,96 @@
+site_name: ESP32-SNMPv3-Agent
+site_description: SNMPv3 (USM authPriv) agent for ESP32 / ESP32-S2 / ESP32-S3 sensor telemetry over Wi-Fi.
+site_url: https://acabtech.github.io/ESP32_SNMPv3/
+repo_url: https://github.com/acabtech/ESP32_SNMPv3
+repo_name: acabtech/ESP32_SNMPv3
+
+# The docs tree is assembled by scripts/docs.py: it copies docs/ and imports
+# the canonical READMEs (repo root, src/, tests/) into .mkdocs-build/docs,
+# rewriting cross-repo links so they resolve on the published site.
+docs_dir: .mkdocs-build/docs
+site_dir: site
+use_directory_urls: true
+strict: true
+
+copyright: >-
+  GPL-3.0 &copy; 2026 PT Alat Cerdas Adikarya Bersama
+
+theme:
+  name: material
+  language: en
+  features:
+    - navigation.sections
+    - navigation.indexes
+    - navigation.top
+    - navigation.footer
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - toc.follow
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/acabtech/ESP32_SNMPv3
+
+plugins:
+  - search
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+
+nav:
+  - Home: index.md
+  - Getting Started: GETTING-STARTED.md
+  - Interop:
+      - Overview: interop/index.md
+      - Zabbix: interop/zabbix.md
+      - Home Assistant: interop/home-assistant.md
+      - net-snmp: interop/net-snmp.md
+  - Guides:
+      - SNMPv3 in 10 minutes: SNMPV3-BACKGROUND.md
+      - Design: DESIGN.md
+      - Roadmap: ROADMAP.md
+      - Library Manager submission: SUBMISSION.md
+  - API Reference: api.md
+  - Testing:
+      - Host tests: testing/host.md
+      - Interop tooling: testing/interop.md
+  - Project:
+      - Contributing: contributing.md
+      - Changelog: changelog.md
+  - License: https://github.com/acabtech/ESP32_SNMPv3/blob/main/LICENSE
