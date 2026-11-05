@@ -2,7 +2,7 @@
 
 All notable changes to ESP32-SNMPv3-Agent. Format: Keep a Changelog 1.1.
 
-## [Unreleased]
+## [0.1.3] — 2026-11-05
 
 ### Added (documentation site)
 - Searchable MkDocs Material documentation site at
@@ -13,6 +13,27 @@ All notable changes to ESP32-SNMPv3-Agent. Format: Keep a Changelog 1.1.
   sync without duplicated Markdown.
 - `docs/interop/index.md`: landing page for the Zabbix, Home Assistant, and
   net-snmp runbooks.
+
+### Fixed
+- **Persist `snmpEngineBoots` on the first boot.** `begin()` only saved the
+  counter when loading it succeeded, so on a factory-fresh or erased-NVS
+  device the key was never created and `engineBoots` stayed 1 forever,
+  breaking RFC 3414 timeliness across power cycles and pinning `state()` to
+  error. The load/increment/save sequence is now a host-tested core helper,
+  [`agentNextBoots()`](src/agent/AgentCore.c), which treats a missing value as
+  0, always saves, and clamps to the RFC 3414 maximum (2147483647).
+- **Correct `Preferences::putUInt()` success check.** `store_save_boots_esp32()`
+  compared the return value to `1`, but arduino-esp32 v3.x returns the number
+  of bytes written (`4`). The comparison now matches
+  `sizeof(uint32_t)`, so a successful NVS write no longer reports the store as
+  failed.
+- **`mibNext()` across multiple dynamic tables.** The winning table candidate
+  was discarded (`best = NULL`) as soon as it was found, letting each later
+  table overwrite it, and `candLen` was not reset per table. GETNEXT/GETBULK
+  walks now compare candidates against a dedicated winner and reset the
+  per-table candidate length, so earlier tables' rows are no longer skipped.
+  Regression tests register two live tables around an empty one and walk
+  across the boundaries.
 
 ## [0.1.2] — 2026-11-01
 

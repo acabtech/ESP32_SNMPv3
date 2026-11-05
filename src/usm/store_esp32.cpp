@@ -31,7 +31,9 @@ static bool store_load_boots_esp32(uint32_t* boots) {
 static bool store_save_boots_esp32(uint32_t boots) {
   Preferences prefs;
   if (!prefs.begin("snmpv3", false /* read-write */)) return false;
-  bool ok = prefs.putUInt("boots", boots) == 1;
+  // putUInt() returns the number of bytes written (4 on success), not a
+  // boolean. Compare like the engine-ID path does with putBytes().
+  bool ok = prefs.putUInt("boots", boots) == sizeof(uint32_t);
   prefs.end();
   return ok;
 }

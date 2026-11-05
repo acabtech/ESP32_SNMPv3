@@ -56,6 +56,21 @@ void agentInit(AgentState* s,
   s->saltCounter = ((uint64_t)boots << 32) | (uint64_t)(nowMs / 1000);
 }
 
+bool agentNextBoots(const AgentStore* store, uint32_t* boots) {
+  if (boots == NULL) return false;
+  uint32_t stored = 0;
+  bool loaded = store != NULL && store->loadBoots != NULL &&
+                store->loadBoots(&stored);
+  // A missing value means first boot (or an erased NVS): start from 0 and
+  // still persist, so the key is created now and later boots resume from it.
+  uint32_t next = loaded ? stored : 0;
+  if (next < USM_TIME_MAX) next += 1;
+  else next = USM_TIME_MAX;   // RFC 3414 §2.3 upper bound
+  *boots = next;
+  return store != NULL && store->saveBoots != NULL &&
+         store->saveBoots(next);
+}
+
 int agentAddUser(AgentState* s, const char* name,
                  const uint8_t* authKey, const uint8_t* privKey) {
   if (s->nUsers >= AGENT_MAX_USERS) return -1;

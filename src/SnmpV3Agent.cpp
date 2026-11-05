@@ -106,10 +106,10 @@ bool SnmpV3Agent::begin(uint16_t agentPort) {
   }
 
   // RFC 3414 §2.3: boots is persistent and incremented once per boot.
+  // A missing value (first boot / NVS erase) starts at 0 and is still saved,
+  // so the key is created and later reboots resume from it.
   uint32_t boots = 0;
-  s_storeOk = s_store->loadBoots && s_store->loadBoots(&boots);
-  boots += 1;
-  if (s_storeOk && s_store->saveBoots) s_storeOk = s_store->saveBoots(boots);
+  s_storeOk = agentNextBoots(s_store, &boots);
 
   agentInit(&s_state, engineId, engineIdLen, boots, millis(), AGENT_MAX_MSG);
   s_upStartMs = millis();

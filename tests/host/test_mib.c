@@ -24,6 +24,11 @@ static uint32_t hook_stat(size_t i) { return 100 + (uint32_t)i; }
 static size_t tbl_rows(void) { return 2; }
 static int32_t tbl_cell(size_t row, size_t col) { (void)col; return (int32_t)(row * 10); }
 
+static size_t tbl2_rows(void) { return 2; }
+static int32_t tbl2_cell(size_t row, size_t col) { (void)col; return (int32_t)(100 + row); }
+static size_t tbl_empty_rows(void) { return 0; }
+static int32_t tbl_empty_cell(size_t row, size_t col) { (void)row; (void)col; return 0; }
+
 static int32_t g_appVal = -17;
 static int32_t app_get(void) { return g_appVal; }
 static bool app_set(int32_t v) { if (v > 1000) return false; g_appVal = v; return true; }
@@ -160,6 +165,40 @@ int test_mib(void) {
       "table: out-of-range instance -> noSuchInstance");
   in.type = MIB_T_INT32; in.u32 = 1;
   ok_(mibSet(t1, 9, &in) == MIB_SET_READ_ONLY, "table: not settable");
+
+  // --- multiple dynamic tables: walk across table boundaries (#3) ---
+  // Registration order matters: the empty table sits between the two live
+  // tables so a stale per-table candidate length would be exercised too.
+  uint32_t kTbl2[] = {1,3,6,1,4,1,67018,30};
+  ok_(mibRegisterTableBase(kTbl2, 8, tbl2_rows, tbl2_cell) >= 0,
+      "tables: register second");
+  uint32_t kTblEmpty[] = {1,3,6,1,4,1,67018,25};
+  ok_(mibRegisterTableBase(kTblEmpty, 8, tbl_empty_rows, tbl_empty_cell) >= 0,
+      "tables: register empty");
+
+  // Just after the app scalars (.10.*) and before the first table (.20.*):
+  // the table candidate must beat the later system subtrees (1.3.6.1.6.*).
+  uint32_t aRoot[] = {1,3,6,1,4,1,67018,19};
+  ok_(mibNext(aRoot, 8, nxt, &nxtLen) == 1 && nxtLen == 9 &&
+      nxt[7] == 20 && nxt[8] == 1,
+      "tables: before first table -> first table row 1");
+  uint32_t a2[] = {1,3,6,1,4,1,67018,20,2};
+  ok_(mibNext(t1, 9, nxt, &nxtLen) == 1 && nxtLen == 9 &&
+      nxt[8] == 2,
+      "tables: first table row 1 -> row 2");
+  ok_(mibNext(a2, 9, nxt, &nxtLen) == 1 && nxtLen == 9 &&
+      nxt[7] == 30 && nxt[8] == 1,
+      "tables: cross boundary to second table row 1");
+  uint32_t b1[] = {1,3,6,1,4,1,67018,30,1};
+  uint32_t b2[] = {1,3,6,1,4,1,67018,30,2};
+  ok_(mibNext(b1, 9, nxt, &nxtLen) == 1 && nxtLen == 9 &&
+      nxt[8] == 2,
+      "tables: second table row 1 -> row 2");
+  // Second table is the last before the system subtrees; ensure the empty
+  // table never yields a phantom candidate.
+  ok_(mibNext(b2, 9, nxt, &nxtLen) == 1 &&
+      !(nxtLen == 9 && nxt[7] == 25),
+      "tables: empty table yields no candidate");
 
   printf("  %d checks, %d failures\n", checks, fails);
   return fails;
