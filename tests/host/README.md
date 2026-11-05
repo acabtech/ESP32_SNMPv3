@@ -1,7 +1,7 @@
 # tests/host — host-side unit tests (no hardware, no Arduino SDK)
 
 Green since **M1** (2026-09-29); extended through **M3** (2026-10-22).
-As of **v0.1.2** the suite runs **2,783 checks, 0 failures** on a bare
+As of **v0.1.3** the suite runs **2,783 checks, 0 failures** on a bare
 machine with a C compiler only: `./run_host_tests.sh`.
 
 | Suite | Covers |

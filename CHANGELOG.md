@@ -2,7 +2,7 @@
 
 All notable changes to ESP32-SNMPv3-Agent. Format: Keep a Changelog 1.1.
 
-## [Unreleased]
+## [0.1.3] — 2026-11-05
 
 ### Added (documentation site)
 - Searchable MkDocs Material documentation site at

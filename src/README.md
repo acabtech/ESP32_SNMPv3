@@ -1,6 +1,6 @@
 # src/ — ESP32-SNMPv3-Agent library source
 
-Module layout — v0.1.2 is feature-complete for the v0.1 scope (BER + USM core
+Module layout — v0.1.3 is feature-complete for the v0.1 scope (BER + USM core
 host-tested, M2 agent engine + NVS store, M3 traps/informs) and is the
 Library Manager submission release. See
 [`docs/ROADMAP.md`](../docs/ROADMAP.md) for exit status and

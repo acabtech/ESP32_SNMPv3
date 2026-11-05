@@ -1,6 +1,6 @@
 // SnmpV3Agent.h — public API for the ESP32-SNMPv3-Agent library
 //
-// Status: v0.1.2 — the class surface is final for v0.1 and fully implemented
+// Status: v0.1.3 — the class surface is final for v0.1 and fully implemented
 // (BER codec, USM authPriv, MIB tree, agent dispatch, v3 traps/informs). This
 // header is what <SnmpV3Agent.h> and the library-name header
 // <ESP32-SNMPv3-Agent.h> both expose. See docs/ROADMAP.md for milestone
