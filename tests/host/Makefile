@@ -47,7 +47,7 @@ build/AgentCore.o: $(SRC)/agent/AgentCore.c $(SRC)/agent/AgentCore.h \
 	@mkdir -p build
 	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
 
-build/test_store.o: test_store.c $(SRC)/usm/store.h
+build/test_store.o: test_store.c $(SRC)/usm/store.h $(SRC)/agent/AgentCore.h
 	@mkdir -p build
 	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
 

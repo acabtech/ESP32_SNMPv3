@@ -451,13 +451,17 @@ int mibNext(const uint32_t* arcs, size_t nArcs,
   }
 
   // 2) dynamic tables: smallest instance <base>.<r> greater than `arcs`;
-  //    keep whichever candidate (static or table) is smaller overall.
+  //    keep whichever candidate (static or table) is smallest overall.
+  //    `chosen` holds the current winner so comparing a later table never
+  //    discards an earlier one (and `best` stays the static-leaf winner).
   uint32_t cand[MIB_ARCS_MAX];
-  size_t candLen = 0;
+  uint32_t chosen[MIB_ARCS_MAX];
+  size_t chosenLen = 0;
   bool have = false;
   for (size_t i = 0; i < g_nTables; i++) {
     MibTable* t = &g_tables[i];
     size_t nRows = tableRows(t);
+    size_t candLen = 0;                  // reset for every table
     for (size_t r = 1; r <= nRows; r++) {
       memcpy(cand, t->arcs, t->arcsLen * sizeof cand[0]);
       cand[t->arcsLen] = (uint32_t)r;
@@ -466,22 +470,25 @@ int mibNext(const uint32_t* arcs, size_t nArcs,
       candLen = 0;
     }
     if (candLen != 0) {
-      if (best == NULL ||
-          mibArcCmp(cand, candLen, best->arcs, best->arcsLen) < 0) {
-        memcpy(nextArcs, cand, candLen * sizeof cand[0]);
-        *nextLen = candLen;
+      if (!have || mibArcCmp(cand, candLen, chosen, chosenLen) < 0) {
+        memcpy(chosen, cand, candLen * sizeof chosen[0]);
+        chosenLen = candLen;
         have = true;
-        best = NULL;
       }
     }
   }
 
-  if (best != NULL) {
-    memcpy(nextArcs, best->arcs, best->arcsLen * sizeof nextArcs[0]);
-    *nextLen = best->arcsLen;
+  // Static leaf wins only when it sorts before the chosen table candidate.
+  if (best != NULL &&
+      (!have || mibArcCmp(best->arcs, best->arcsLen, chosen, chosenLen) < 0)) {
+    memcpy(chosen, best->arcs, best->arcsLen * sizeof chosen[0]);
+    chosenLen = best->arcsLen;
     have = true;
   }
-  return have ? 1 : 0;
+  if (!have) return 0;
+  memcpy(nextArcs, chosen, chosenLen * sizeof chosen[0]);
+  *nextLen = chosenLen;
+  return 1;
 }
 
 // RFC 2578 §8.2: a name is a noSuchInstance when it shares the OBJECT

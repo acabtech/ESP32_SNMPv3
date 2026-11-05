@@ -69,6 +69,14 @@ void agentInit(AgentState* s,
                const uint8_t* engineId, size_t engineIdLen,
                uint32_t boots, uint32_t nowMs, uint32_t maxMessageSize);
 
+// Load the persisted boot counter, increment it for this boot (RFC 3414
+// §2.3), clamp it to the protocol maximum, and always write it back. A
+// missing value (first boot / NVS erase) is treated as 0, so the first save
+// creates the key instead of being skipped forever. `*boots` receives the
+// value to pass to agentInit(); the return value is the save result (false
+// only when the backing store is unavailable/failing).
+bool agentNextBoots(const AgentStore* store, uint32_t* boots);
+
 // Add a user whose keys are ALREADY localized with the engine ID (the
 // Arduino layer localizes at addUser() time). Returns user index or -1.
 int agentAddUser(AgentState* s, const char* name,

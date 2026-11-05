@@ -430,14 +430,14 @@ static void test_m2(void) {
       ok_(res == AGENT_RESPONSE && inspectResponse(s_out, n, &pduTag, &reqId,
           &status, &idx, vbs, 32, &nvbs, plain, &plainLen) == 0,
           "bulk: parses");
-      // The MIB holds the 17 system leaves plus the app scalars + table that
+      // The MIB holds the 17 system leaves plus the app scalars + tables that
       // test_mib registered earlier (shared static registry), so the walk is
-      // 17 sys + 3 app + 2 table rows + endOfMibView = 23 varbinds.
-      ok_(nvbs == 23, "bulk: 22 leaves + endOfMibView");
+      // 17 sys + 3 app + 4 table rows + endOfMibView = 25 varbinds.
+      ok_(nvbs == 25, "bulk: 24 leaves + endOfMibView");
       ok_(nvbs >= 1 && vbs[0].nameLen == 9 &&
           vbs[0].name[7] == 1 && vbs[0].name[8] == 0,
           "bulk: first is sysDescr.0");
-      ok_(nvbs == 23 && vbs[22].decValueTag == BER_TAG_ENDOFMIBVIEW,
+      ok_(nvbs == 25 && vbs[24].decValueTag == BER_TAG_ENDOFMIBVIEW,
           "bulk: last is endOfMibView");
       // leaves appear in order: names monotonic (skip the trailing
       // endOfMibView varbind, which echoes the last leaf's name)

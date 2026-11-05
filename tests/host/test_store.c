@@ -11,6 +11,7 @@
 #include <string.h>
 
 #include "usm/store.h"
+#include "agent/AgentCore.h"
 
 static int fails = 0;
 static int checks = 0;
@@ -23,6 +24,7 @@ static void ok_(int cond, const char* what) {
 // --- RAM-backed store (mirrors the NVS semantics) ---------------------------
 static uint32_t s_boots;
 static bool     s_hasBoots;
+static bool     s_saveFails;
 static uint8_t  s_engineId[32];
 static size_t   s_engineIdLen;
 static bool     s_hasEngineId;
@@ -33,6 +35,7 @@ static bool ram_load_boots(uint32_t* boots) {
   return true;
 }
 static bool ram_save_boots(uint32_t boots) {
+  if (s_saveFails) return false;
   s_boots = boots; s_hasBoots = true; return true;
 }
 static bool ram_load_engineid(uint8_t* out, size_t cap, size_t* outLen) {
@@ -62,6 +65,7 @@ static AgentStore ram_store(void) {
 
 static void test_boots(void) {
   s_hasBoots = false;
+  s_saveFails = false;
   AgentStore s = ram_store();
   uint32_t b = 0;
   ok_(!s.loadBoots(&b), "boots: first boot -> nothing stored");
@@ -69,6 +73,37 @@ static void test_boots(void) {
   ok_(s.loadBoots(&b) && b == 7, "boots: reload 7");
   ok_(s.saveBoots(8), "boots: save 8 (next boot)");
   ok_(s.loadBoots(&b) && b == 8, "boots: reload 8");
+}
+
+// Mirrors SnmpV3Agent::begin(): the boot counter must be created on the very
+// first boot (issue #2), incremented once per reboot, clamped to the RFC 3414
+// maximum, and a failing save must be reported.
+static void test_boot_sequence(void) {
+  s_hasBoots = false;
+  s_saveFails = false;
+  AgentStore s = ram_store();
+  uint32_t b = 0;
+
+  ok_(agentNextBoots(&s, &b) && b == 1,
+      "sequence: first boot increments 0 -> 1 and saves");
+  ok_(s.loadBoots(&b) && b == 1, "sequence: first boot persisted");
+  ok_(agentNextBoots(&s, &b) && b == 2, "sequence: second boot -> 2");
+  ok_(s.loadBoots(&b) && b == 2, "sequence: second boot persisted");
+  ok_(agentNextBoots(&s, &b) && b == 3, "sequence: third boot -> 3");
+  ok_(s.loadBoots(&b) && b == 3, "sequence: third boot persisted");
+
+  // At the protocol ceiling the counter must not wrap or advance.
+  s_boots = 2147483647u;
+  s_hasBoots = true;
+  ok_(agentNextBoots(&s, &b) && b == 2147483647u,
+      "sequence: boots clamped at RFC 3414 maximum");
+  ok_(s.loadBoots(&b) && b == 2147483647u,
+      "sequence: clamped value persisted");
+
+  // A failing store must surface as false (state() reports degraded).
+  s_saveFails = true;
+  ok_(!agentNextBoots(&s, &b), "sequence: failing save reports false");
+  s_saveFails = false;
 }
 
 static void test_engineid(void) {
@@ -88,6 +123,7 @@ static void test_engineid(void) {
 int test_store(void) {
   printf("== store seam ==\n");
   test_boots();
+  test_boot_sequence();
   test_engineid();
   printf("  %d checks, %d failures\n", checks, fails);
   return fails;
