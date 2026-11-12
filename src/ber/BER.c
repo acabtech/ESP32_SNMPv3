@@ -95,10 +95,12 @@ int berDecodeInt32(const uint8_t* in, size_t max, size_t* pos, int32_t* v) {
     if ((b0 == 0x00 && !(b1 & 0x80)) || (b0 == 0xFF && (b1 & 0x80)))
       return BER_ERR_LENGTH;                       // non-minimal
   }
-  int32_t val = (in[start] & 0x80) ? -1 : 0;
-  for (size_t i = 0; i < len; i++) val = (int32_t)((val << 8) | in[start + i]);
+  // Accumulate the two's-complement bit pattern in an unsigned value: left
+  // shifting a negative signed integer is undefined behavior.
+  uint32_t val = (in[start] & 0x80) ? 0xFFFFFFFFu : 0;
+  for (size_t i = 0; i < len; i++) val = (val << 8) | in[start + i];
   *pos = start + len;
-  *v = val;
+  *v = (int32_t)val;
   return BER_OK;
 }
 
@@ -292,10 +294,10 @@ int berEncodePdu(uint8_t* out, size_t cap, uint8_t pduTag,
   return berEncodeTlv(out, cap, pduTag, body, n);
 }
 
-int berDecodePdu(const uint8_t* in, size_t max, size_t* pos,
-                 uint8_t* pduTag, uint32_t* reqId,
-                 uint32_t* status, uint32_t* idx,
-                 BerVarbind* vbs, size_t maxVbs, size_t* nvbs) {
+int berDecodePduHeader(const uint8_t* in, size_t max, size_t* pos,
+                       uint8_t* pduTag, uint32_t* reqId,
+                       uint32_t* status, uint32_t* idx,
+                       size_t* vbsOff, size_t* vbsLen) {
   uint8_t tag;
   size_t len;
   int r = berDecodeTlv(in, max, pos, &tag, &len);
@@ -308,17 +310,33 @@ int berDecodePdu(const uint8_t* in, size_t max, size_t* pos,
   r = berDecodeInt32(in, contentEnd, pos, &v); if (r < 0) return r; *status = (uint32_t)v;
   r = berDecodeInt32(in, contentEnd, pos, &v); if (r < 0) return r; *idx = (uint32_t)v;
 
-  // VarBindList ::= SEQUENCE OF VarBind (RFC 3416 §3)
+  // VarBindList ::= SEQUENCE OF VarBind (RFC 3416 §3). Locate and skip it
+  // without decoding individual varbinds: header-only callers must not fail
+  // just because the list holds more entries than they could store.
   r = berDecodeTlv(in, contentEnd, pos, &tag, &len);
   if (r < 0) return r;
   if (tag != BER_TAG_SEQUENCE) return BER_ERR_TYPE;
-  size_t vbEnd = *pos + len;
+  if (vbsOff != NULL) *vbsOff = *pos;
+  if (vbsLen != NULL) *vbsLen = len;
+  *pos += len;
+  return BER_OK;
+}
 
+int berDecodePdu(const uint8_t* in, size_t max, size_t* pos,
+                 uint8_t* pduTag, uint32_t* reqId,
+                 uint32_t* status, uint32_t* idx,
+                 BerVarbind* vbs, size_t maxVbs, size_t* nvbs) {
+  size_t vbOff, vbLen;
+  int r = berDecodePduHeader(in, max, pos, pduTag, reqId, status, idx,
+                             &vbOff, &vbLen);
+  if (r < 0) return r;
+
+  size_t vbEnd = vbOff + vbLen;
   size_t n = 0;
-  while (*pos < vbEnd) {
+  while (vbOff < vbEnd) {
     if (n >= maxVbs) return BER_ERR_OVERFLOW;
     size_t nameLen = BER_OID_MAX_ARCS;
-    r = berDecodeVarbind(in, vbEnd, pos,
+    r = berDecodeVarbind(in, vbEnd, &vbOff,
                          vbs[n].name, &nameLen,
                          &vbs[n].decValueTag, &vbs[n].decValueOff,
                          &vbs[n].decValueLen);

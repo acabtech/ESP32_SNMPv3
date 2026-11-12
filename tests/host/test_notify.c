@@ -136,11 +136,26 @@ static int inspectNotification(const uint8_t* msg, size_t len,
 static size_t makeManagerResponse(uint8_t* out, size_t cap,
                                   uint32_t msgId, uint32_t reqId,
                                   uint32_t boots, uint32_t time) {
-  uint8_t pdu[64];
+  // Carry two varbinds so the acknowledgement path is exercised with more
+  // than one entry in the VarBindList.
+  uint8_t nullTlv[4];
+  int nt = berEncodeNull(nullTlv, sizeof nullTlv);
+  BerVarbind vbs[2];
+  memset(vbs, 0, sizeof vbs);
+  memcpy(vbs[0].name, kSysNameOid, sizeof kSysNameOid);
+  vbs[0].nameLen = 9;
+  vbs[0].valueTlv = nullTlv;
+  vbs[0].valueLen = (size_t)nt;
+  memcpy(vbs[1].name, kSysUpTimeOid, sizeof kSysUpTimeOid);
+  vbs[1].nameLen = 9;
+  vbs[1].valueTlv = nullTlv;
+  vbs[1].valueLen = (size_t)nt;
+
+  uint8_t pdu[160];
   int pl = berEncodePdu(pdu, sizeof pdu, BER_TAG_RESPONSE, reqId, 0, 0,
-                        NULL, 0);
+                        vbs, 2);
   if (pl < 0) return 0;
-  static uint8_t scoped[128], ct[160], sec[256];
+  static uint8_t scoped[256], ct[320], sec[256];
   int r = berEncodeScopedPdu(scoped, sizeof scoped, V_M2_ENGID, V_M2_ENGID_LEN,
                              (const uint8_t*)"", 0, pdu, (size_t)pl);
   if (r < 0) return 0;

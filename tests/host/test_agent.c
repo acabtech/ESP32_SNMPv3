@@ -579,6 +579,41 @@ static void test_m2(void) {
     ok_(reqId2 == 58, "noAuth: request-id echoed (plaintext body readable)");
   }
 
+  // 11) multi-varbind noAuth request from a KNOWN user: the report must echo
+  //     the manager's request-id even though the varbind list does not fit a
+  //     one-element decode buffer.
+  {
+    uint8_t pdu[260], req[700];
+    const uint32_t kDesc[9] = {1, 3, 6, 1, 2, 1, 1, 1, 0};
+    const uint32_t kName[9] = {1, 3, 6, 1, 2, 1, 1, 5, 0};
+    BerVarbind vbs2[2];
+    memset(vbs2, 0, sizeof vbs2);
+    uint8_t nullTlv[4];
+    int nt = berEncodeNull(nullTlv, sizeof nullTlv);
+    for (int i = 0; i < 2; i++) {
+      const uint32_t* src = i == 0 ? kDesc : kName;
+      memcpy(vbs2[i].name, src, 9 * sizeof(uint32_t));
+      vbs2[i].nameLen = 9;
+      vbs2[i].valueTlv = nullTlv;
+      vbs2[i].valueLen = (size_t)nt;
+    }
+    size_t pl = (size_t)berEncodePdu(pdu, sizeof pdu, BER_TAG_GET_REQ,
+                                     4242, 0, 0, vbs2, 2);
+    size_t rl = makeRequest(req, sizeof req, 909, 65507, 0x04,
+                            V_M2_BOOTS, V_M2_REQ_TIME, "telemetry", pdu, pl);
+    size_t n = 0;
+    int res = agentProcess(&s_agent, req, rl, V_M2_PROC_MS,
+                           s_out, sizeof s_out, &n);
+    ok_(res == AGENT_RESPONSE, "noAuth multi-varbind: report");
+    uint8_t pduTag; uint32_t reqId2, status, idx;
+    BerVarbind vbs[2]; size_t nvbs = 0;
+    uint8_t plain[600]; size_t plainLen = 0;
+    ok_(inspectResponse(s_out, n, &pduTag, &reqId2, &status, &idx,
+                        vbs, 2, &nvbs, plain, &plainLen) == 0,
+        "noAuth multi-varbind: parses");
+    ok_(reqId2 == 4242, "noAuth multi-varbind: request-id preserved");
+  }
+
   printf("  %d checks, %d failures\n", checks, fails);
 }
 

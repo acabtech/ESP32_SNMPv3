@@ -155,6 +155,31 @@ static void test_structs(void) {
   ok_(out[0].decValueTag == BER_TAG_INTEGER && out[0].decValueLen == 1,
       "PDU decode varbind value bounds");
 
+  // Header-only decode must succeed independent of varbind count, while the
+  // full decoder still reports when the caller's array is too small.
+  {
+    BerVarbind vbs2[2];
+    memset(vbs2, 0, sizeof vbs2);
+    for (int i = 0; i < 2; i++) {
+      memcpy(vbs2[i].name, nm, sizeof nm);
+      vbs2[i].nameLen = 10;
+      vbs2[i].valueTlv = val42;
+      vbs2[i].valueLen = (size_t)vn;
+    }
+    n = berEncodePdu(buf, sizeof buf, BER_TAG_GET_REQ, 4242, 0, 0, vbs2, 2);
+    ok_(n > 0, "PDU two-varbind encode");
+    pos = 0; tag = 0; rid = 0;
+    size_t vbo = 0, vbl = 0;
+    r = berDecodePduHeader(buf, (size_t)n, &pos, &tag, &rid, &st, &ix,
+                           &vbo, &vbl);
+    ok_(r == BER_OK && tag == BER_TAG_GET_REQ && rid == 4242 &&
+        vbo > 0 && vbl > 0, "PDU header decodes multi-varbind request");
+    pos = 0; nOut = 0;
+    r = berDecodePdu(buf, (size_t)n, &pos, &tag, &rid, &st, &ix,
+                     out, 1, &nOut);
+    ok_(r == BER_ERR_OVERFLOW, "PDU decode still reports varbind overflow");
+  }
+
   // scopedPDU roundtrip
   uint8_t pdu[256]; int pn = berEncodePdu(pdu, sizeof pdu, BER_TAG_GET_REQ, 7, 0, 0, &vb, 1);
   uint8_t eid[] = {0x80, 0x00, 0x1f, 0x88, 0x80, 0xde, 0xad, 0xbe, 0xef, 0x00, 0x01};
