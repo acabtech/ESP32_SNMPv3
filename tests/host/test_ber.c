@@ -44,7 +44,8 @@ static uint32_t rnd(void) { rng = rng * 1664525u + 1013904223u; return rng; }
 // --- tests -----------------------------------------------------------------
 static void test_length(void) {
   uint8_t buf[16];
-  size_t vals[] = {0, 1, 127, 128, 255, 256, 5000, 16383, 16384, 65535, 1000000};
+  size_t vals[] = {0, 1, 127, 128, 255, 256, 5000, 16383, 16384, 65535, 1000000,
+                   0x7FFFFFFFu};
   for (size_t i = 0; i < sizeof vals / sizeof vals[0]; i++) {
     int n = berEncodeLength(buf, sizeof buf, vals[i]);
     ok_(n > 0, "length encode ok");
@@ -60,6 +61,15 @@ static void test_length(void) {
     ok_(n > 0 && berDecodeLength(buf, (size_t)n, &pos, &out) == BER_OK
         && out == v, "length fuzz roundtrip");
   }
+  // The length octets are written into a fixed scratch buffer; a value that
+  // needs a fifth octet must be rejected before that byte is stored (#10).
+#if SIZE_MAX > UINT32_MAX
+  ok_(berEncodeLength(buf, sizeof buf, (size_t)UINT32_MAX + 1) == BER_ERR_OVERFLOW,
+      "length: fifth octet rejected");
+#endif
+  // Keep encode in sync with berDecodeLength's 4-octet, high-bit-clear limit.
+  ok_(berEncodeLength(buf, sizeof buf, (size_t)UINT32_MAX) == BER_ERR_OVERFLOW,
+      "length: above 2^31-1 rejected");
 }
 
 static void test_int(void) {

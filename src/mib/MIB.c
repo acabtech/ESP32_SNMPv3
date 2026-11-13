@@ -372,7 +372,7 @@ static MibTable* findTableFor(const uint32_t* arcs, size_t nArcs) {
 int mibRegisterTableBase(const uint32_t* base, size_t nBase,
                          size_t (*rows)(void),
                          int32_t (*cell)(size_t row, size_t col)) {
-  if (base == NULL || nBase == 0 || nBase > MIB_ARCS_MAX) return -1;
+  if (base == NULL || nBase == 0 || nBase >= MIB_ARCS_MAX) return -1;
   if (rows == NULL || cell == NULL) return -1;
   if (g_nTables >= MIB_MAX_TABLES) return -1;
   MibTable* t = &g_tables[g_nTables++];

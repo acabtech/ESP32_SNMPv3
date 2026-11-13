@@ -69,7 +69,8 @@ int mibRegisterSystem(void);
 
 // Register a dynamic single-column table (public-API registerTable):
 //   instance OID = <base>.<row+1>, value = INT32 cell(row, 0).
-// Returns the table index (>= 0) or -1 when full.
+// nBase must be < MIB_ARCS_MAX so the row arc fits the instance.
+// Returns the table index (>= 0) or -1 when full / base too long.
 int mibRegisterTableBase(const uint32_t* base, size_t nBase,
                          size_t (*rows)(void),
                          int32_t (*cell)(size_t row, size_t col));
