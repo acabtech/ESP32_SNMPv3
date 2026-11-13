@@ -282,21 +282,28 @@ static bool statsVarbind(BerVarbind* vb, size_t statIdx, uint32_t value,
 
 // --- request parsing helpers ------------------------------------------------
 
+// ScopedPDU region -> PDU header fields only. The VarBindList is skipped
+// without decoding, so the result does not depend on the varbind count.
+static int decodeIncomingPduHeader(const uint8_t* plain, size_t plainLen,
+                                   uint8_t* pduTag, uint32_t* reqId,
+                                   uint32_t* status, uint32_t* idx) {
+  size_t pos = 0, ceo, cel, cno, cnl, po, pl;
+  int r = berDecodeScopedPdu(plain, plainLen, &pos, &ceo, &cel, &cno, &cnl,
+                             &po, &pl);
+  if (r < 0) return r;
+  pos = 0;
+  return berDecodePduHeader(plain + po, pl, &pos, pduTag, reqId, status, idx,
+                            NULL, NULL);
+}
+
 // Pull request-id out of a plaintext scopedPDU TLV region (best effort).
 static void extractReqId(const uint8_t* scoped, size_t scopedLen,
                          uint32_t* reqId) {
   *reqId = 0;
   if (scoped == NULL || scopedLen < 8) return;
-  size_t pos = 0, ceo, cel, cno, cnl, po, pl;
-  if (berDecodeScopedPdu(scoped, scopedLen, &pos, &ceo, &cel, &cno, &cnl,
-                         &po, &pl) < 0)
-    return;
-  pos = 0;
   uint8_t tag; uint32_t status, idx;
-  BerVarbind vbs[1];
-  size_t nvbs;
-  if (berDecodePdu(scoped + po, pl, &pos, &tag, reqId, &status, &idx,
-                   vbs, 1, &nvbs) < 0)
+  if (decodeIncomingPduHeader(scoped, scopedLen, &tag, reqId,
+                              &status, &idx) < 0)
     *reqId = 0;
 }
 
@@ -372,10 +379,11 @@ static int decodeMibValue(const uint8_t* in, size_t off, size_t len,
   switch (tag) {
     case BER_TAG_INTEGER: {
       if (len == 0 || len > 4) return BER_ERR_OVERFLOW;
-      int32_t v = (in[off] & 0x80) ? -1 : 0;   // sign-extend two's complement
-      for (size_t i = 0; i < len; i++) v = (int32_t)((v << 8) | in[off + i]);
+      // Unsigned accumulator avoids left-shifting a negative signed value.
+      uint32_t v = (in[off] & 0x80) ? 0xFFFFFFFFu : 0;
+      for (size_t i = 0; i < len; i++) v = (v << 8) | in[off + i];
       out->type = MIB_T_INT32;
-      out->u32 = (uint32_t)v;
+      out->u32 = v;
       return 0;
     }
     case BER_TAG_OCTET_STRING:
@@ -931,9 +939,8 @@ int agentInformAck(AgentInform* inf, AgentState* s, const AgentUser* user,
   }
 
   uint8_t pduTag; uint32_t reqId, status, idx;
-  BerVarbind vbs[1]; size_t nvbs = 0;
-  if (decodeIncomingPdu(plain, plainLen, &pduTag, &reqId, &status, &idx,
-                        vbs, 1, &nvbs) < 0)
+  if (decodeIncomingPduHeader(plain, plainLen, &pduTag, &reqId,
+                              &status, &idx) < 0)
     return 0;
   if (pduTag != BER_TAG_RESPONSE || reqId != inf->reqId) return 0;
 
