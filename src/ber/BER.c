@@ -17,11 +17,15 @@ int berEncodeLength(uint8_t* out, size_t cap, size_t len) {
   }
   // Long form: 0x80|N then N octets of the length as a minimal base-256
   // big-endian integer (BER X.690 §8.1.3.5 — NOT base-128 like OIDs).
-  uint8_t b[4];
+  uint8_t b[sizeof(size_t)];
   int n = 0;
   size_t v = len;
-  while (v != 0) { b[n++] = (uint8_t)(v & 0xFF); v >>= 8; }
-  if (n > 4) return BER_ERR_OVERFLOW;              // lengths > 2^31-1 unsupported
+  while (v != 0) {
+    if ((size_t)n == sizeof b) return BER_ERR_OVERFLOW;
+    b[n++] = (uint8_t)(v & 0xFF);
+    v >>= 8;
+  }
+  if (len > 0x7FFFFFFFu) return BER_ERR_OVERFLOW;  // lengths > 2^31-1 unsupported
   if (cap < (size_t)(n + 1)) return BER_ERR_TRUNCATED;
   out[0] = (uint8_t)(0x80 | n);
   for (int i = 0; i < n; i++) out[1 + i] = b[n - 1 - i];
