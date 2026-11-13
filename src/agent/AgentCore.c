@@ -97,7 +97,9 @@ static bool memEq(const void* a, const void* b, size_t n) {
 static uint32_t engineTimeNow(AgentState* s, uint32_t nowMs) {
   uint32_t elapsed = (uint32_t)((nowMs - (uint32_t)s->clock.monotonicMs) / 1000u);
   s->clock.time += elapsed;
-  s->clock.monotonicMs = nowMs;
+  // Consume only the whole seconds just accounted for; keep the sub-second
+  // remainder so frequent calls (e.g. 500 ms polling) still advance time.
+  s->clock.monotonicMs += (uint64_t)elapsed * 1000u;
   if (s->clock.time > USM_TIME_MAX) s->clock.time = USM_TIME_MAX;
   return s->clock.time;
 }
