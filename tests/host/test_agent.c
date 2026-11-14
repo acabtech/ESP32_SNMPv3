@@ -617,7 +617,29 @@ static void test_m2(void) {
   printf("  %d checks, %d failures\n", checks, fails);
 }
 
+static void test_engine_clock(void) {
+  printf("== engine clock (M2) ==\n");
+  agent_setup();
+
+  // 401 requests 500 ms apart cover 200 s of wall time. Sub-second spacing
+  // must carry the fractional second instead of resetting the ms anchor.
+  for (uint32_t i = 1; i <= 401; i++) {
+    size_t n = 0;
+    agentProcess(&s_agent, V_REQ_DISCOVERY, sizeof V_REQ_DISCOVERY,
+                 V_M2_INIT_MS + i * 500u, s_out, sizeof s_out, &n);
+  }
+  ok_(s_agent.clock.time == 200, "engine clock: 500 ms cadence advances 200 s");
+
+  const uint32_t kEngineTimeOid[] = {1, 3, 6, 1, 6, 3, 1, 1, 6, 0};
+  MibValue val;
+  ok_(mibGet(kEngineTimeOid, 10, &val) == 1 && val.u32 == 200,
+      "engine clock: snmpEngineTime tracks wall time");
+
+  printf("  %d checks, %d failures\n", checks, fails);
+}
+
 int test_agent(void) {
   test_m2();
+  test_engine_clock();
   return fails;
 }
