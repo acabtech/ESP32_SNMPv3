@@ -210,6 +210,10 @@ static int inspectResponse(const uint8_t* resp, size_t len,
 }
 
 static const uint32_t kSysNameOid[] = {1, 3, 6, 1, 2, 1, 1, 5, 0};
+
+static int32_t s_rejectVal = 0;
+static int32_t rejectGetter(void) { return s_rejectVal; }
+static bool rejectSetter(int32_t v) { (void)v; return false; }
 static const uint32_t kUptimeOid[]  = {1, 3, 6, 1, 2, 1, 1, 3, 0};
 static const uint32_t kContactOid[] = {1, 3, 6, 1, 2, 1, 1, 4, 0};
 static const uint32_t kStatsOid[6][12] = {
@@ -552,6 +556,50 @@ static void test_m2(void) {
                           vbs, 2, &nvbs, plain, &plainLen) == 0, "tooBig: parses");
       ok_(status == 1 && idx == 0 && nvbs == 0, "tooBig: status=1, no varbinds");
     }
+
+    // 9i) failed multi-varbind SET is atomic (RFC 3416 §4.2.5): if a later
+    // varbind fails, earlier ones must not remain applied.
+    {
+      static bool regDone = false;
+      if (!regDone) {
+        ok_(mibRegisterInt32("1.3.6.1.4.1.67018.99.1.0",
+                             rejectGetter, rejectSetter) >= 0,
+            "SET-atomic: register rejecting scalar");
+        regDone = true;
+      }
+      const uint32_t kName[9]   = {1, 3, 6, 1, 2, 1, 1, 5, 0};
+      const uint32_t kReject[10]= {1, 3, 6, 1, 4, 1, 67018, 99, 1, 0};
+      uint8_t nameVal[16], rejVal[8];
+      int nvt = berEncodeOctetString(nameVal, sizeof nameVal,
+                                     (const uint8_t*)"evil", 4);
+      int rvt = berEncodeInt32(rejVal, sizeof rejVal, 1234);
+      BerVarbind vbs2[2];
+      memset(vbs2, 0, sizeof vbs2);
+      memcpy(vbs2[0].name, kName, sizeof kName);
+      vbs2[0].nameLen = 9; vbs2[0].valueTlv = nameVal; vbs2[0].valueLen = (size_t)nvt;
+      memcpy(vbs2[1].name, kReject, sizeof kReject);
+      vbs2[1].nameLen = 10; vbs2[1].valueTlv = rejVal; vbs2[1].valueLen = (size_t)rvt;
+      size_t pl2 = (size_t)berEncodePdu(pdu, sizeof pdu, BER_TAG_SET_REQ,
+                                        4242, 0, 0, vbs2, 2);
+      // capture sysName before
+      MibValue before;
+      ok_(mibGet(kName, 9, &before) == 1, "SET-atomic: read sysName before");
+      size_t rl2 = makeRequest(req, sizeof req, 909, 65507, 0x07,
+                               V_M2_BOOTS, V_M2_REQ_TIME, "telemetry", pdu, pl2);
+      res = agentProcess(&s_agent, req, rl2, V_M2_PROC_MS, s_out, sizeof s_out, &n);
+      uint8_t pduTag; uint32_t reqId, status, idx;
+      BerVarbind rvbs[2]; size_t rnvbs = 0;
+      uint8_t plain[600]; size_t plainLen = 0;
+      ok_(res == AGENT_RESPONSE && inspectResponse(s_out, n, &pduTag, &reqId,
+          &status, &idx, rvbs, 2, &rnvbs, plain, &plainLen) == 0,
+          "SET-atomic: parses");
+      ok_(status == SNMP_ERR_WRONG_VALUE && idx == 2, "SET-atomic: wrongValue@2");
+      MibValue after;
+      ok_(mibGet(kName, 9, &after) == 1, "SET-atomic: read sysName after");
+      ok_(after.type == MIB_T_OCTETS && after.octetsLen == before.octetsLen &&
+          memcmp(after.octets, before.octets, before.octetsLen) == 0,
+          "SET-atomic: sysName unchanged after failed multi-varbind SET");
+    }
   }
 
   // 10) response to a noAuth request from a KNOWN user -> UnsupportedSecLevels
@@ -577,6 +625,39 @@ static void test_m2(void) {
         memcmp(vbs[0].name, kStatsOid[0], 11 * sizeof(uint32_t)) == 0,
         "noAuth: UnsupportedSecLevels report");
     ok_(reqId2 == 58, "noAuth: request-id echoed (plaintext body readable)");
+  }
+
+  // 11) authNoPriv request (valid MAC, no privacy) is rejected: the agent
+  //     speaks authPriv only (UnsupportedSecLevels report, no dispatch).
+  {
+    uint8_t pdu[200], req[700];
+    const uint32_t kName[9] = {1, 3, 6, 1, 2, 1, 1, 5, 0};
+    size_t pl = makePdu(pdu, sizeof pdu, BER_TAG_GET_REQ, 59, 0, 0,
+                        kName, 9, NULL, 0);
+    size_t rl = makeRequest(req, sizeof req, 910, 65507, 0x05,
+                            V_M2_BOOTS, V_M2_REQ_TIME, "telemetry", pdu, pl);
+    uint32_t before = s_agent.stats[0];
+    size_t n = 0;
+    int res = agentProcess(&s_agent, req, rl, V_M2_PROC_MS,
+                           s_out, sizeof s_out, &n);
+    ok_(res == AGENT_RESPONSE, "authNoPriv: report");
+    ok_(s_agent.stats[0] == before + 1, "authNoPriv: UnsupportedSecLevels++");
+    uint8_t pduTag; uint32_t reqId2, status, idx;
+    BerVarbind vbs[2]; size_t nvbs = 0;
+    uint8_t plain[600]; size_t plainLen = 0;
+    // report is unauthenticated/unencrypted
+    {
+      uint8_t ver, fl, sm; uint32_t mid, msize; size_t spo, spl, sdo, sdl;
+      ok_(berDecodeV3Message(s_out, n, &ver, &mid, &msize, &fl, &sm,
+                             &spo, &spl, &sdo, &sdl) == 0, "authNoPriv: envelope");
+      ok_((fl & 0x03) == 0, "authNoPriv: response not authPriv");
+    }
+    ok_(inspectResponse(s_out, n, &pduTag, &reqId2, &status, &idx,
+                        vbs, 2, &nvbs, plain, &plainLen) == 0, "authNoPriv: parses");
+    ok_(pduTag == BER_TAG_REPORT, "authNoPriv: Report PDU");
+    ok_(nvbs == 1 && vbs[0].nameLen == 11 &&
+        memcmp(vbs[0].name, kStatsOid[0], 11 * sizeof(uint32_t)) == 0,
+        "authNoPriv: UnsupportedSecLevels report");
   }
 
   printf("  %d checks, %d failures\n", checks, fails);
