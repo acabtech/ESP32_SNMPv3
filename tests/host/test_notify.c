@@ -132,30 +132,17 @@ static int inspectNotification(const uint8_t* msg, size_t len,
 
 // Build an authPriv v3 Response PDU from the manager back to the agent, with
 // the agent's engineID/boots/time and the user's keys (the agent is the
-// authoritative engine for a notification it sent).
+// authoritative engine for a notification it sent). `vbs`/`nvbs` echo the
+// Inform's variable-bindings (RFC 3416 §4.2.6); NULL/0 sends an empty list.
 static size_t makeManagerResponse(uint8_t* out, size_t cap,
                                   uint32_t msgId, uint32_t reqId,
-                                  uint32_t boots, uint32_t time) {
-  // Carry two varbinds so the acknowledgement path is exercised with more
-  // than one entry in the VarBindList.
-  uint8_t nullTlv[4];
-  int nt = berEncodeNull(nullTlv, sizeof nullTlv);
-  BerVarbind vbs[2];
-  memset(vbs, 0, sizeof vbs);
-  memcpy(vbs[0].name, kSysNameOid, sizeof kSysNameOid);
-  vbs[0].nameLen = 9;
-  vbs[0].valueTlv = nullTlv;
-  vbs[0].valueLen = (size_t)nt;
-  memcpy(vbs[1].name, kSysUpTimeOid, sizeof kSysUpTimeOid);
-  vbs[1].nameLen = 9;
-  vbs[1].valueTlv = nullTlv;
-  vbs[1].valueLen = (size_t)nt;
-
-  uint8_t pdu[160];
+                                  uint32_t boots, uint32_t time,
+                                  const BerVarbind* vbs, size_t nvbs) {
+  uint8_t pdu[512];
   int pl = berEncodePdu(pdu, sizeof pdu, BER_TAG_RESPONSE, reqId, 0, 0,
-                        vbs, 2);
+                        vbs, nvbs);
   if (pl < 0) return 0;
-  static uint8_t scoped[256], ct[320], sec[256];
+  static uint8_t scoped[600], ct[620], sec[256];
   int r = berEncodeScopedPdu(scoped, sizeof scoped, V_M2_ENGID, V_M2_ENGID_LEN,
                              (const uint8_t*)"", 0, pdu, (size_t)pl);
   if (r < 0) return 0;
@@ -313,22 +300,40 @@ static void test_inform_ack(void) {
                                  msg, sizeof msg, &msgLen);
   ok_(r == 0 && msgLen > 0, "inform-ack: built");
 
+  // The manager's Response echoes the Inform's variable-bindings (RFC 3416
+  // §4.2.6): [sysUpTime.0, snmpTrapOID.0, trapOid].
+  uint8_t vb0[8], vb1[64], vb2[64];
+  BerVarbind evbs[3];
+  memset(evbs, 0, sizeof evbs);
+  int n = berEncodeUintTagged(vb0, sizeof vb0, BER_TAG_TIMETICKS, 123456);
+  memcpy(evbs[0].name, kSysUpTimeOid, sizeof kSysUpTimeOid);
+  evbs[0].nameLen = 9; evbs[0].valueTlv = vb0; evbs[0].valueLen = (size_t)n;
+  n = berEncodeOid(vb1, sizeof vb1, kSysNameOid, 9);
+  memcpy(evbs[1].name, kSnmpTrapOidOid, sizeof kSnmpTrapOidOid);
+  evbs[1].nameLen = 11; evbs[1].valueTlv = vb1; evbs[1].valueLen = (size_t)n;
+  const uint8_t kNameVal[] = "esp32-snmp";
+  n = berEncodeOctetString(vb2, sizeof vb2, kNameVal, sizeof kNameVal - 1);
+  memcpy(evbs[2].name, kSysNameOid, sizeof kSysNameOid);
+  evbs[2].nameLen = 9; evbs[2].valueTlv = vb2; evbs[2].valueLen = (size_t)n;
+
   AgentInform inf;
   agentInformStart(&inf, msg, msgLen, 0x0BADF00Du, reqId, V_M2_PROC_MS);
 
-  // matching Response -> acknowledged
+  // matching Response echoing all 3 varbinds -> acknowledged
   uint8_t resp[AGENT_MAX_MSG + 64];
   size_t respLen = makeManagerResponse(resp, sizeof resp, 0x99u, reqId,
-                                       s_agent.clock.boots, s_agent.clock.time);
-  ok_(respLen > 0, "inform-ack: manager response built");
+                                       s_agent.clock.boots, s_agent.clock.time,
+                                       evbs, 3);
+  ok_(respLen > 0, "inform-ack: manager response built (3 varbinds)");
   ok_(agentInformAck(&inf, &s_agent, &s_agent.users[0], resp, respLen) == 1,
-      "inform-ack: matching response acknowledged");
+      "inform-ack: matching response echoed acknowledged");
   ok_(!inf.active, "inform-ack: state machine cleared");
 
   // wrong request-id -> not acknowledged
   agentInformStart(&inf, msg, msgLen, 0x0BADF00Du, reqId, V_M2_PROC_MS);
   respLen = makeManagerResponse(resp, sizeof resp, 0x99u, reqId + 1,
-                                s_agent.clock.boots, s_agent.clock.time);
+                                s_agent.clock.boots, s_agent.clock.time,
+                                evbs, 3);
   ok_(respLen > 0, "inform-ack: mismatched response built");
   ok_(agentInformAck(&inf, &s_agent, &s_agent.users[0], resp, respLen) == 0,
       "inform-ack: wrong request-id rejected");
@@ -337,7 +342,8 @@ static void test_inform_ack(void) {
   // tampered MAC -> not acknowledged
   agentInformStart(&inf, msg, msgLen, 0x0BADF00Du, reqId, V_M2_PROC_MS);
   respLen = makeManagerResponse(resp, sizeof resp, 0x99u, reqId,
-                                s_agent.clock.boots, s_agent.clock.time);
+                                s_agent.clock.boots, s_agent.clock.time,
+                                evbs, 3);
   resp[respLen - 1] ^= 0xFF;
   ok_(agentInformAck(&inf, &s_agent, &s_agent.users[0], resp, respLen) == 0,
       "inform-ack: tampered MAC rejected");

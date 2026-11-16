@@ -450,9 +450,10 @@ int agentProcess(AgentState* s, const uint8_t* in0, size_t inLen,
   }
 
   // --- security gate (RFC 3414 §3.2 order) --------------------------------
-  if (!wantAuth) {
-    // noAuthNoPriv: discovery (empty/unknown engine or user) is served;
-    // a KNOWN user below its security level gets UnsupportedSecLevels.
+  if (!wantAuth || (wantAuth && !wantPriv)) {
+    // noAuthNoPriv discovery (empty/unknown engine or user) is served; a
+    // KNOWN user below its security level gets UnsupportedSecLevels.
+    // authNoPriv is never served: the agent speaks authPriv only.
     bool engineUnknown = sp.engineIdLen != s->engineIdLen ||
                          (s->engineIdLen != 0 &&
                           !memEq(sp.engineId, s->engineId, s->engineIdLen));
@@ -465,9 +466,9 @@ int agentProcess(AgentState* s, const uint8_t* in0, size_t inLen,
       }
     }
     size_t statIdx;
-    if (engineUnknown) statIdx = 3;        // usmStatsUnknownEngineIDs
-    else if (!userKnown) statIdx = 2;      // usmStatsUnknownUserNames
-    else statIdx = 0;                      // usmStatsUnsupportedSecLevels
+    if (!wantAuth && engineUnknown) statIdx = 3;   // usmStatsUnknownEngineIDs
+    else if (!wantAuth && !userKnown) statIdx = 2; // usmStatsUnknownUserNames
+    else statIdx = 0;                               // usmStatsUnsupportedSecLevels
     s->stats[statIdx]++;
     if (!reportable) return AGENT_NO_RESPONSE;
     size_t n = 0;
@@ -667,25 +668,42 @@ int agentProcess(AgentState* s, const uint8_t* in0, size_t inLen,
       }
     }
   } else if (pduTag == BER_TAG_SET_REQ) {
-    // Apply in order; first failure becomes error-status/index (RFC 3416
-    // §4.2.5 lite: no undo — the failing agent state is documented).
+    // Atomic SET (RFC 3416 §4.2.5): decode/validate all varbinds, snapshot
+    // current values, then apply in order. On any failure restore the prefix
+    // that was already applied so a failed multi-varbind SET commits nothing.
+    static MibValue s_setVals[AGENT_MAX_VBS];
+    static MibValue s_oldVals[AGENT_MAX_VBS];
+    static bool s_hadOld[AGENT_MAX_VBS];
+
     for (size_t i = 0; i < nvbs && errStatus == SNMP_ERR_NO_ERROR; i++) {
-      MibValue inVal;
+      s_hadOld[i] = false;
       // decValueOff is rebased to the decrypted plaintext (s_plain).
       if (decodeMibValue(s_plain, s_vbs[i].decValueOff, s_vbs[i].decValueLen,
-                         s_vbs[i].decValueTag, &inVal) < 0) {
+                         s_vbs[i].decValueTag, &s_setVals[i]) < 0) {
         errStatus = SNMP_ERR_WRONG_TYPE;
-        errIndex = (uint32_t)(i + 1);
-        break;
-      }
-      int mr = mibSet(s_vbs[i].name, s_vbs[i].nameLen, &inVal);
-      if (mr != MIB_SET_APPLIED) {
-        errStatus = setStatusFor(mr);
         errIndex = (uint32_t)(i + 1);
       }
     }
-    if (errStatus == SNMP_ERR_NO_ERROR) {
-      // success: echo the CURRENT (post-set) values (RFC 3416 Â§4.2.5)
+    size_t applied = 0;
+    for (size_t i = 0; i < nvbs && errStatus == SNMP_ERR_NO_ERROR; i++) {
+      if (mibGet(s_vbs[i].name, s_vbs[i].nameLen, &s_oldVals[i]) == 1)
+        s_hadOld[i] = true;
+      int mr = mibSet(s_vbs[i].name, s_vbs[i].nameLen, &s_setVals[i]);
+      if (mr != MIB_SET_APPLIED) {
+        errStatus = setStatusFor(mr);
+        errIndex = (uint32_t)(i + 1);
+        break;
+      }
+      applied = i + 1;
+    }
+    if (errStatus != SNMP_ERR_NO_ERROR) {
+      // Roll back in reverse order; best-effort restore of prior values.
+      for (size_t j = applied; j > 0; j--) {
+        if (s_hadOld[j - 1])
+          (void)mibSet(s_vbs[j - 1].name, s_vbs[j - 1].nameLen, &s_oldVals[j - 1]);
+      }
+    } else {
+      // success: echo the CURRENT (post-set) values (RFC 3416 §4.2.5)
       for (size_t i = 0; i < nvbs; i++) {
         MibValue val;
         if (mibGet(s_vbs[i].name, s_vbs[i].nameLen, &val) != 1) {
@@ -940,9 +958,11 @@ int agentInformAck(AgentInform* inf, AgentState* s, const AgentUser* user,
     plainLen = sdl;
   }
 
+  static BerVarbind vbs[AGENT_MAX_VBS];
   uint8_t pduTag; uint32_t reqId, status, idx;
-  if (decodeIncomingPduHeader(plain, plainLen, &pduTag, &reqId,
-                              &status, &idx) < 0)
+  size_t nvbs = 0;
+  if (decodeIncomingPdu(plain, plainLen, &pduTag, &reqId, &status, &idx,
+                        vbs, AGENT_MAX_VBS, &nvbs) < 0)
     return 0;
   if (pduTag != BER_TAG_RESPONSE || reqId != inf->reqId) return 0;
 
