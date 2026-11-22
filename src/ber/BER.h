@@ -122,6 +122,14 @@ typedef struct {
 int berEncodePdu(uint8_t* out, size_t cap, uint8_t pduTag,
                  uint32_t reqId, uint32_t status, uint32_t idx,
                  const BerVarbind* vbs, size_t nvbs);
+// Decode only the PDU header (tag + request-id/error-status/error-index) and
+// locate the VarBindList without materializing varbinds. On success `pos` is
+// advanced past the whole PDU; vbsOff/vbsLen (optional) describe the list
+// contents. Use this when only the header fields are needed.
+int berDecodePduHeader(const uint8_t* in, size_t max, size_t* pos,
+                       uint8_t* pduTag, uint32_t* reqId,
+                       uint32_t* status, uint32_t* idx,
+                       size_t* vbsOff, size_t* vbsLen);
 int berDecodePdu(const uint8_t* in, size_t max, size_t* pos,
                  uint8_t* pduTag, uint32_t* reqId,
                  uint32_t* status, uint32_t* idx,

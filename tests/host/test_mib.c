@@ -118,6 +118,12 @@ int test_mib(void) {
   // Register the dynamic table here so ordering checks below include it.
   uint32_t kTbl[] = {1,3,6,1,4,1,67018,20};
   ok_(mibRegisterTableBase(kTbl, 8, tbl_rows, tbl_cell) >= 0, "table: register");
+  // The instance is <base>.<row>, so a MIB_ARCS_MAX-arc base cannot fit in
+  // mibNext's MIB_ARCS_MAX-arc candidate buffers; reject it at registration.
+  uint32_t kBig[MIB_ARCS_MAX];
+  for (size_t i = 0; i < MIB_ARCS_MAX; i++) kBig[i] = 1;
+  ok_(mibRegisterTableBase(kBig, MIB_ARCS_MAX, tbl_rows, tbl_cell) == -1,
+      "table: full-length base rejected");
 
   // --- GetNext ordering (incl. the 67018 arc and prefix-first rule) ---
   uint32_t nxt[MIB_ARCS_MAX]; size_t nxtLen;

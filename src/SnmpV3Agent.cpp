@@ -221,9 +221,9 @@ bool SnmpV3Agent::registerTable(const char* baseOid,
                                 size_t (*rows)(void),
                                 int32_t (*cell)(size_t row, size_t col)) {
   if (baseOid == NULL || rows == NULL || cell == NULL) return false;
-  uint32_t arcs[64];
-  int n = mibParseOid(baseOid, arcs, 64);
-  if (n < 0) return false;
+  uint32_t arcs[MIB_ARCS_MAX];
+  int n = mibParseOid(baseOid, arcs, MIB_ARCS_MAX);
+  if (n < 0 || (size_t)n >= MIB_ARCS_MAX) return false;
   return mibRegisterTableBase(arcs, (size_t)n, rows, cell) >= 0;
 }
 
