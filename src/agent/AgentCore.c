@@ -75,10 +75,12 @@ int agentAddUser(AgentState* s, const char* name,
                  const uint8_t* authKey, const uint8_t* privKey) {
   if (s->nUsers >= AGENT_MAX_USERS) return -1;
   if (name == NULL || authKey == NULL || privKey == NULL) return -1;
-  size_t len = strlen(name);
+  size_t len = 0;
+  while (len < AGENT_NAME_MAX && name[len] != '\0') len++;
   if (len == 0 || len >= AGENT_NAME_MAX) return -1;
   AgentUser* u = &s->users[s->nUsers];
-  strcpy(u->name, name);
+  memcpy(u->name, name, len);
+  u->name[len] = '\0';
   u->nameLen = len;
   memcpy(u->authKey, authKey, SNMPV3_SHA256_KEY);
   memcpy(u->privKey, privKey, SNMPV3_AES128_KEY);

@@ -206,6 +206,33 @@ int test_mib(void) {
       !(nxtLen == 9 && nxt[7] == 25),
       "tables: empty table yields no candidate");
 
+  // #22: NULL getter must be rejected at registration time.
+  {
+    uint32_t bad[] = {1,3,6,1,4,1,67018,99,0};
+    ok_(mibRegisterCtx(bad, 9, MIB_T_INT32, NULL, NULL, NULL) == -1,
+        "register: NULL getter rejected (#22)");
+  }
+
+  // #24: system text setter keeps bounds and NUL-terminates.
+  {
+    char longDescr[MIB_OCTETS_MAX + 8];
+    memset(longDescr, 'd', sizeof longDescr - 1);
+    longDescr[sizeof longDescr - 1] = '\0';
+    mibSetSystemText(longDescr, NULL, NULL, NULL);
+    MibValue dv;
+    uint32_t sysDescrOid[] = {1,3,6,1,2,1,1,1,0};
+    ok_(mibGet(sysDescrOid, 9, &dv) == 1 && dv.type == MIB_T_OCTETS &&
+        dv.octetsLen < MIB_OCTETS_MAX,
+        "sysDescr: oversized value not stored (#24)");
+    char maxDescr[MIB_OCTETS_MAX];
+    memset(maxDescr, 'x', MIB_OCTETS_MAX - 1);
+    maxDescr[MIB_OCTETS_MAX - 1] = '\0';
+    mibSetSystemText(maxDescr, NULL, NULL, NULL);
+    ok_(mibGet(sysDescrOid, 9, &dv) == 1 && dv.octetsLen == MIB_OCTETS_MAX - 1,
+        "sysDescr: max-length value stored (#24)");
+    mibSetSystemText("ESP32-SNMPv3-Agent", "esp32-snmp", "", "");
+  }
+
   printf("  %d checks, %d failures\n", checks, fails);
   return fails;
 }

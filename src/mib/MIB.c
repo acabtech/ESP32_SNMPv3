@@ -106,7 +106,8 @@ static const MibLeaf* findExact(const uint32_t* arcs, size_t nArcs) {
 
 int mibRegisterCtx(const uint32_t* arcs, size_t nArcs, MibType type,
                    MibGetFn get, MibSetFn set, void* ctx) {
-  if (arcs == NULL || nArcs == 0 || nArcs > MIB_ARCS_MAX) return -1;
+  if (arcs == NULL || nArcs == 0 || nArcs > MIB_ARCS_MAX || get == NULL)
+    return -1;
   if (g_nLeaves >= MIB_MAX_LEAVES) return -1;
   if (findExact(arcs, nArcs) != NULL) return -1;   // duplicate instance
   MibLeaf* l = &g_leaves[g_nLeaves++];
@@ -268,14 +269,22 @@ void mibSetSystemHooks(const MibSystemHooks* hooks) {
 
 void mibSetSystemText(const char* sysDescr, const char* sysName,
                       const char* sysContact, const char* sysLocation) {
-  if (sysDescr && strlen(sysDescr) < MIB_OCTETS_MAX)
-    strcpy(g_sysDescr, sysDescr);
-  if (sysName && strlen(sysName) < MIB_OCTETS_MAX)
-    strcpy(g_sysName, sysName);
-  if (sysContact && strlen(sysContact) < MIB_OCTETS_MAX)
-    strcpy(g_sysContact, sysContact);
-  if (sysLocation && strlen(sysLocation) < MIB_OCTETS_MAX)
-    strcpy(g_sysLocation, sysLocation);
+  if (sysDescr) {
+    size_t n = strlen(sysDescr);
+    if (n < MIB_OCTETS_MAX) { memcpy(g_sysDescr, sysDescr, n); g_sysDescr[n] = '\0'; }
+  }
+  if (sysName) {
+    size_t n = strlen(sysName);
+    if (n < MIB_OCTETS_MAX) { memcpy(g_sysName, sysName, n); g_sysName[n] = '\0'; }
+  }
+  if (sysContact) {
+    size_t n = strlen(sysContact);
+    if (n < MIB_OCTETS_MAX) { memcpy(g_sysContact, sysContact, n); g_sysContact[n] = '\0'; }
+  }
+  if (sysLocation) {
+    size_t n = strlen(sysLocation);
+    if (n < MIB_OCTETS_MAX) { memcpy(g_sysLocation, sysLocation, n); g_sysLocation[n] = '\0'; }
+  }
 }
 
 static int mibRegisterSystemInner(void);

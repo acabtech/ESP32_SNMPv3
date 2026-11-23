@@ -53,6 +53,9 @@ static void agent_setup(void) {
   s_agent.saltCounter = ((uint64_t)V_M2_BOOTS << 32) | (V_M2_INIT_MS / 1000);
   ok_(agentAddUser(&s_agent, "telemetry", V_MSG_B_AUTHKEY, V_MSG_B_PRIVKEY) == 0,
       "agent: add user telemetry");
+  ok_(agentAddUser(&s_agent, "this_username_is_way_too_long_for_buffer", V_MSG_B_AUTHKEY,
+                   V_MSG_B_PRIVKEY) < 0,
+      "agent: reject oversized username (#23)");
 }
 
 // --- request building (uses oracle-verified USM primitives) ------------------
