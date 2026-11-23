@@ -96,7 +96,10 @@ bool SnmpV3Agent::begin(uint16_t agentPort) {
     // (and all localized keys) survives the next reboot (docs/DESIGN.md).
     memcpy(engineId, s_engineIdOverride, s_engineIdOverrideLen);
     engineIdLen = s_engineIdOverrideLen;
-    if (s_store->saveEngineId) s_store->saveEngineId(engineId, engineIdLen);
+    if (s_store->saveEngineId == NULL ||
+        !s_store->saveEngineId(engineId, engineIdLen)) {
+      return false;
+    }
   } else if (s_store->loadEngineId &&
              s_store->loadEngineId(engineId, sizeof engineId, &engineIdLen)) {
     // A persisted override from a previous boot — reuse it unchanged.
@@ -109,7 +112,11 @@ bool SnmpV3Agent::begin(uint16_t agentPort) {
   // A missing value (first boot / NVS erase) starts at 0 and is still saved,
   // so the key is created and later reboots resume from it.
   uint32_t boots = 0;
-  s_storeOk = agentNextBoots(s_store, &boots);
+  if (!agentNextBoots(s_store, &boots)) {
+    s_storeOk = false;
+    return false;
+  }
+  s_storeOk = true;
 
   agentInit(&s_state, engineId, engineIdLen, boots, millis(), AGENT_MAX_MSG);
   s_upStartMs = millis();
