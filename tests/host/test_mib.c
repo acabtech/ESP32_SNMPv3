@@ -233,6 +233,18 @@ int test_mib(void) {
     mibSetSystemText("ESP32-SNMPv3-Agent", "esp32-snmp", "", "");
   }
 
+  // #17: registration must return post-sort leaf index.
+  {
+    int idx20 = mibRegisterInt32("1.3.6.1.4.1.67018.90.20.0", app_get, NULL);
+    int idx10 = mibRegisterInt32("1.3.6.1.4.1.67018.90.10.0", app_get, NULL);
+    int idx30 = mibRegisterInt32("1.3.6.1.4.1.67018.90.30.0", app_get, NULL);
+    int idx15 = mibRegisterInt32("1.3.6.1.4.1.67018.90.15.0", app_get, NULL);
+    ok_(idx20 >= 0 && idx10 == idx20,
+        "register: index reflects post-sort position (#17)");
+    ok_(idx30 == idx20 + 2 && idx15 == idx20 + 1,
+        "register: later inserts return post-sort indices (#17)");
+  }
+
   printf("  %d checks, %d failures\n", checks, fails);
   return fails;
 }

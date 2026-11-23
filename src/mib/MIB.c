@@ -119,7 +119,8 @@ int mibRegisterCtx(const uint32_t* arcs, size_t nArcs, MibType type,
   l->set = set;
   l->ctx = ctx;
   mibSort();
-  return (int)(l - g_leaves);
+  const MibLeaf* inserted = findExact(arcs, nArcs);
+  return inserted ? (int)(inserted - g_leaves) : -1;
 }
 
 int mibRegister(const uint32_t* arcs, size_t nArcs, MibType type,
