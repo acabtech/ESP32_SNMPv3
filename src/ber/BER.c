@@ -183,7 +183,7 @@ int berEncodeOid(uint8_t* out, size_t cap, const uint32_t* arcs, size_t nArcs) {
   if (arcs[0] > 2 || (arcs[0] < 2 && arcs[1] > 39)) return BER_ERR_OID;
   if (nArcs > BER_OID_MAX_ARCS) return BER_ERR_OID;
 
-  uint8_t body[128];
+  uint8_t body[BER_OID_MAX_ARCS * 5];
   size_t n = 0;
   size_t nSub = 0;
   uint32_t first = arcs[0] * 40u + arcs[1];
@@ -234,15 +234,21 @@ int berDecodeOid(const uint8_t* in, size_t max, size_t* pos,
 int berEncodeVarbind(uint8_t* out, size_t cap,
                      const uint32_t* name, size_t nameLen,
                      const uint8_t* valueTlv, size_t valueLen) {
-  uint8_t body[256];
-  size_t n = 0;
-  int r = berEncodeOid(body + n, sizeof body - n, name, nameLen);
+  uint8_t oidTlv[3 + BER_OID_MAX_ARCS * 5];
+  int r = berEncodeOid(oidTlv, sizeof oidTlv, name, nameLen);
   if (r < 0) return r;
-  n += (size_t)r;
-  if (n + valueLen > sizeof body) return BER_ERR_OVERFLOW;
-  memcpy(body + n, valueTlv, valueLen);
-  n += valueLen;
-  return berEncodeTlv(out, cap, BER_TAG_SEQUENCE, body, n);
+  size_t oidLen = (size_t)r;
+  if (oidLen > SIZE_MAX - valueLen) return BER_ERR_OVERFLOW;
+  size_t bodyLen = oidLen + valueLen;
+  if (cap < 1) return BER_ERR_TRUNCATED;
+  out[0] = BER_TAG_SEQUENCE;
+  int hl = berEncodeLength(out + 1, cap - 1, bodyLen);
+  if (hl < 0) return hl;
+  size_t off = 1u + (size_t)hl;
+  if (cap - off < bodyLen) return BER_ERR_TRUNCATED;
+  memcpy(out + off, oidTlv, oidLen);
+  memcpy(out + off + oidLen, valueTlv, valueLen);
+  return (int)(off + bodyLen);
 }
 
 int berDecodeVarbind(const uint8_t* in, size_t max, size_t* pos,

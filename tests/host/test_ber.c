@@ -139,6 +139,22 @@ static void test_oid(void) {
     for (int a = 0; a < nArcs; a++) if (back[a] != arcs[a]) same = 0;
     ok_(same, "OID fuzz roundtrip");
   }
+  // 64-arc OID with large subidentifiers (#18): worst-case base-128 body is
+  // 1 + 62*5 = 311 bytes, exceeding the old 128-byte encode buffer.
+  {
+    uint32_t arcs[BER_OID_MAX_ARCS], back[BER_OID_MAX_ARCS];
+    arcs[0] = 1; arcs[1] = 3; arcs[2] = 6; arcs[3] = 1; arcs[4] = 4; arcs[5] = 1;
+    for (size_t i = 6; i < BER_OID_MAX_ARCS; i++) arcs[i] = 0x1FFFFFFFu;
+    uint8_t big[512];
+    int n = berEncodeOid(big, sizeof big, arcs, BER_OID_MAX_ARCS);
+    ok_(n > 0, "OID max-arcs encode");
+    size_t pos = 0; size_t nBack = BER_OID_MAX_ARCS;
+    int r = berDecodeOid(big, (size_t)n, &pos, back, &nBack);
+    ok_(r == BER_OK && nBack == BER_OID_MAX_ARCS, "OID max-arcs decode");
+    int same = 1;
+    for (size_t i = 0; i < BER_OID_MAX_ARCS; i++) if (back[i] != arcs[i]) same = 0;
+    ok_(same, "OID max-arcs roundtrip");
+  }
 }
 
 static void test_structs(void) {
@@ -148,6 +164,29 @@ static void test_structs(void) {
   uint8_t val42[8]; int vn = berEncodeInt32(val42, sizeof val42, 42);
   int n = berEncodeVarbind(buf, sizeof buf, nm, 10, val42, (size_t)vn);
   ok_(n > 0, "varbind encode");
+
+  // Varbind with 64-arc OID (#20): max OID TLV is ~314 bytes, exceeding the
+  // old 256-byte varbind body buffer.
+  {
+    uint32_t bigNm[BER_OID_MAX_ARCS];
+    bigNm[0] = 1; bigNm[1] = 3; bigNm[2] = 6; bigNm[3] = 1; bigNm[4] = 4; bigNm[5] = 1;
+    for (size_t i = 6; i < BER_OID_MAX_ARCS; i++) bigNm[i] = 0x1FFFFFFFu;
+    uint8_t bigBuf[640];
+    int bn = berEncodeVarbind(bigBuf, sizeof bigBuf, bigNm, BER_OID_MAX_ARCS,
+                              val42, (size_t)vn);
+    ok_(bn > 0, "varbind max-arcs OID encode");
+    size_t pos2 = 0;
+    uint32_t outNm[BER_OID_MAX_ARCS]; size_t outNmLen = BER_OID_MAX_ARCS;
+    uint8_t vTag = 0; size_t vOff = 0, vLen = 0;
+    int br = berDecodeVarbind(bigBuf, (size_t)bn, &pos2, outNm, &outNmLen,
+                              &vTag, &vOff, &vLen);
+    ok_(br == BER_OK && outNmLen == BER_OID_MAX_ARCS,
+        "varbind max-arcs OID decode");
+    int sameNm = 1;
+    for (size_t i = 0; i < BER_OID_MAX_ARCS; i++)
+      if (outNm[i] != bigNm[i]) sameNm = 0;
+    ok_(sameNm && vTag == BER_TAG_INTEGER, "varbind max-arcs OID roundtrip");
+  }
 
   // PDU GetRequest with one varbind, decode fields + name
   BerVarbind vb;
