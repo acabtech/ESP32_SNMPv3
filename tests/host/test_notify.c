@@ -325,7 +325,8 @@ static void test_inform_ack(void) {
                                        s_agent.clock.boots, s_agent.clock.time,
                                        evbs, 3);
   ok_(respLen > 0, "inform-ack: manager response built (3 varbinds)");
-  ok_(agentInformAck(&inf, &s_agent, &s_agent.users[0], resp, respLen) == 1,
+  ok_(agentInformAck(&inf, &s_agent, &s_agent.users[0], resp, respLen,
+                     V_M2_PROC_MS) == 1,
       "inform-ack: matching response echoed acknowledged");
   ok_(!inf.active, "inform-ack: state machine cleared");
 
@@ -335,7 +336,8 @@ static void test_inform_ack(void) {
                                 s_agent.clock.boots, s_agent.clock.time,
                                 evbs, 3);
   ok_(respLen > 0, "inform-ack: mismatched response built");
-  ok_(agentInformAck(&inf, &s_agent, &s_agent.users[0], resp, respLen) == 0,
+  ok_(agentInformAck(&inf, &s_agent, &s_agent.users[0], resp, respLen,
+                     V_M2_PROC_MS) == 0,
       "inform-ack: wrong request-id rejected");
   ok_(inf.active, "inform-ack: still pending after mismatch");
 
@@ -345,8 +347,60 @@ static void test_inform_ack(void) {
                                 s_agent.clock.boots, s_agent.clock.time,
                                 evbs, 3);
   resp[respLen - 1] ^= 0xFF;
-  ok_(agentInformAck(&inf, &s_agent, &s_agent.users[0], resp, respLen) == 0,
+  ok_(agentInformAck(&inf, &s_agent, &s_agent.users[0], resp, respLen,
+                     V_M2_PROC_MS) == 0,
       "inform-ack: tampered MAC rejected");
+}
+
+static void test_inform_oversize_rejected(void) {
+  printf("== notify: inform oversize (issue 26) ==\n");
+  uint8_t big[AGENT_MAX_MSG + 1];
+  memset(big, 0xA5, sizeof big);
+  AgentInform inf;
+  int r = agentInformStart(&inf, big, sizeof big, 1, 2, V_M2_PROC_MS);
+  ok_(r == -1, "inform-oversize: start rejected");
+  ok_(!inf.active, "inform-oversize: not active");
+  ok_(inf.msgLen == 0, "inform-oversize: no partial datagram stored");
+}
+
+static void test_inform_ack_timeliness(void) {
+  printf("== notify: inform ack timeliness (issue 27) ==\n");
+  uint8_t msg[AGENT_MAX_MSG + 64];
+  size_t msgLen = 0;
+  uint32_t reqId = 99;
+  int r = agentBuildNotification(&s_agent, &s_agent.users[0],
+                                 BER_TAG_INFORM_REQ, 0x0BADF00Eu, reqId,
+                                 kSysNameOid, 9, 123456, V_M2_PROC_MS,
+                                 msg, sizeof msg, &msgLen);
+  ok_(r == 0 && msgLen > 0, "inform-ack-time: built");
+
+  uint8_t vb0[8], vb1[64], vb2[64];
+  BerVarbind evbs[3];
+  memset(evbs, 0, sizeof evbs);
+  int n = berEncodeUintTagged(vb0, sizeof vb0, BER_TAG_TIMETICKS, 123456);
+  memcpy(evbs[0].name, kSysUpTimeOid, sizeof kSysUpTimeOid);
+  evbs[0].nameLen = 9; evbs[0].valueTlv = vb0; evbs[0].valueLen = (size_t)n;
+  n = berEncodeOid(vb1, sizeof vb1, kSysNameOid, 9);
+  memcpy(evbs[1].name, kSnmpTrapOidOid, sizeof kSnmpTrapOidOid);
+  evbs[1].nameLen = 11; evbs[1].valueTlv = vb1; evbs[1].valueLen = (size_t)n;
+  const uint8_t kNameVal[] = "esp32-snmp";
+  n = berEncodeOctetString(vb2, sizeof vb2, kNameVal, sizeof kNameVal - 1);
+  memcpy(evbs[2].name, kSysNameOid, sizeof kSysNameOid);
+  evbs[2].nameLen = 9; evbs[2].valueTlv = vb2; evbs[2].valueLen = (size_t)n;
+
+  AgentInform inf;
+  ok_(agentInformStart(&inf, msg, msgLen, 0x0BADF00Eu, reqId, V_M2_PROC_MS) == 0,
+      "inform-ack-time: started");
+
+  uint8_t resp[512];
+  size_t respLen = makeManagerResponse(resp, sizeof resp, 0x99u, reqId,
+                                       s_agent.clock.boots,
+                                       s_agent.clock.time + 200,
+                                       evbs, 3);
+  ok_(agentInformAck(&inf, &s_agent, &s_agent.users[0], resp, respLen,
+                     V_M2_PROC_MS) == 0,
+      "inform-ack-time: out-of-window response rejected");
+  ok_(inf.active, "inform-ack-time: still pending after timeliness reject");
 }
 
 int test_notify(void) {
@@ -355,6 +409,8 @@ int test_notify(void) {
   test_inform();
   test_inform_state_machine();
   test_inform_ack();
+  test_inform_oversize_rejected();
+  test_inform_ack_timeliness();
   printf("  %d checks, %d failures\n", checks, fails);
   return fails;
 }

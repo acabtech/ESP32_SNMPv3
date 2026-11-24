@@ -254,6 +254,11 @@ static void test_m2(void) {
   printf("== agent core (M2) ==\n");
   agent_setup();
 
+  // Issue 28: duplicate usernames must be rejected without consuming a slot.
+  ok_(agentAddUser(&s_agent, "telemetry", V_MSG_B_AUTHKEY, V_MSG_B_PRIVKEY) == -1,
+      "agent: duplicate user rejected");
+  ok_(s_agent.nUsers == 1, "agent: duplicate did not consume slot");
+
   // 1) discovery: byte-exact Report
   {
     size_t n = 0;

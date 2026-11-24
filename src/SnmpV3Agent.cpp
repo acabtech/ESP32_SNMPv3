@@ -296,7 +296,8 @@ bool SnmpV3Agent::sendInform(const char* oid, uint32_t instance) {
   if (msgLen == 0) return false;
 
   // Arm the retry state machine and send the first attempt.
-  agentInformStart(&s_inform, msg, msgLen, msgId, reqId, millis());
+  if (agentInformStart(&s_inform, msg, msgLen, msgId, reqId, millis()) < 0)
+    return false;
   s_trapUdp.beginPacket(s_trapIp, s_trapPort);
   s_trapUdp.write(msg, msgLen);
   s_trapUdp.endPacket();
@@ -311,7 +312,7 @@ bool SnmpV3Agent::sendInform(const char* oid, uint32_t instance) {
       if ((size_t)rn <= sizeof rbuf) {
         s_trapUdp.read(rbuf, rn);
         if (agentInformAck(&s_inform, &s_state, &s_state.users[0],
-                           rbuf, (size_t)rn)) {
+                           rbuf, (size_t)rn, millis())) {
           s_trapUdp.clear();
           return true;
         }

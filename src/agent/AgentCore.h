@@ -79,6 +79,7 @@ bool agentNextBoots(const AgentStore* store, uint32_t* boots);
 
 // Add a user whose keys are ALREADY localized with the engine ID (the
 // Arduino layer localizes at addUser() time). Returns user index or -1.
+// Rejects duplicate usernames already registered in the agent.
 int agentAddUser(AgentState* s, const char* name,
                  const uint8_t* authKey, const uint8_t* privKey);
 
@@ -134,18 +135,20 @@ typedef struct {
 } AgentInform;
 
 // Arm the state machine with a built message (attempts = 1, sent now).
-void agentInformStart(AgentInform* inf, const uint8_t* msg, size_t msgLen,
-                      uint32_t msgId, uint32_t reqId, uint32_t nowMs);
+// Returns 0 on success, -1 if the datagram is too large to store/retry.
+int agentInformStart(AgentInform* inf, const uint8_t* msg, size_t msgLen,
+                     uint32_t msgId, uint32_t reqId, uint32_t nowMs);
 
 // Drive retries. Returns 1 = (re)send inf->msg now, 0 = keep waiting,
 // -1 = give up (budget exhausted). Clears `active` on -1.
 int agentInformTick(AgentInform* inf, uint32_t nowMs);
 
 // Verify a manager response against a pending inform: envelope + engineID +
-// user + MAC + decrypt + Response PDU with a matching request-id.
-// Returns 1 = acknowledged (clears `active`), 0 = no match / not an ack.
+// user + timeliness + MAC + decrypt + Response PDU with a matching
+// request-id. Returns 1 = acknowledged (clears `active`), 0 = no match /
+// not an ack.
 int agentInformAck(AgentInform* inf, AgentState* s, const AgentUser* user,
-                   const uint8_t* resp, size_t respLen);
+                   const uint8_t* resp, size_t respLen, uint32_t nowMs);
 
 #ifdef __cplusplus
 }
