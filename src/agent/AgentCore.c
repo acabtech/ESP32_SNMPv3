@@ -77,6 +77,11 @@ int agentAddUser(AgentState* s, const char* name,
   if (name == NULL || authKey == NULL || privKey == NULL) return -1;
   size_t len = strlen(name);
   if (len == 0 || len >= AGENT_NAME_MAX) return -1;
+  for (size_t i = 0; i < s->nUsers; i++) {
+    if (s->users[i].nameLen == len &&
+        memcmp(s->users[i].name, name, len) == 0)
+      return -1;
+  }
   AgentUser* u = &s->users[s->nUsers];
   strcpy(u->name, name);
   u->nameLen = len;
@@ -870,10 +875,13 @@ int agentBuildNotification(AgentState* s, const AgentUser* user,
                          out, cap, outLen);
 }
 
-void agentInformStart(AgentInform* inf, const uint8_t* msg, size_t msgLen,
-                      uint32_t msgId, uint32_t reqId, uint32_t nowMs) {
+int agentInformStart(AgentInform* inf, const uint8_t* msg, size_t msgLen,
+                     uint32_t msgId, uint32_t reqId, uint32_t nowMs) {
+  if (inf == NULL || msg == NULL || msgLen == 0 || msgLen > sizeof inf->msg) {
+    if (inf != NULL) memset(inf, 0, sizeof *inf);
+    return -1;
+  }
   memset(inf, 0, sizeof *inf);
-  if (msgLen > sizeof inf->msg) msgLen = sizeof inf->msg;
   memcpy(inf->msg, msg, msgLen);
   inf->msgLen = msgLen;
   inf->msgId = msgId;
@@ -882,6 +890,7 @@ void agentInformStart(AgentInform* inf, const uint8_t* msg, size_t msgLen,
   inf->sentMs = nowMs;
   inf->attempts = 1;
   inf->active = true;
+  return 0;
 }
 
 int agentInformTick(AgentInform* inf, uint32_t nowMs) {
@@ -903,7 +912,7 @@ int agentInformTick(AgentInform* inf, uint32_t nowMs) {
 }
 
 int agentInformAck(AgentInform* inf, AgentState* s, const AgentUser* user,
-                   const uint8_t* resp, size_t respLen) {
+                   const uint8_t* resp, size_t respLen, uint32_t nowMs) {
   if (inf == NULL || !inf->active || s == NULL || user == NULL) return 0;
   if (respLen < 16 || respLen > AGENT_MAX_MSG) return 0;
 
@@ -928,6 +937,11 @@ int agentInformAck(AgentInform* inf, AgentState* s, const AgentUser* user,
   if (sp.userLen != user->nameLen ||
       memcmp(sp.user, user->name, user->nameLen) != 0)
     return 0;
+
+  // Keep the authoritative clock fresh and enforce timeliness (RFC 3414 §3.2)
+  // before accepting an authenticated inform response.
+  engineTimeNow(s, nowMs);
+  if (usmTimelinessCheck(&s->clock, sp.boots, sp.time, nowMs) < 0) return 0;
 
   // Inform responses must be authenticated (authPriv mirrors the request).
   if (!(flags & 0x01)) return 0;
