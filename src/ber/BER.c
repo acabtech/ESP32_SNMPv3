@@ -206,6 +206,9 @@ int berDecodeOid(const uint8_t* in, size_t max, size_t* pos,
   if (r < 0) return r;
   if (tag != BER_TAG_OID) return BER_ERR_TYPE;
   if (len == 0) return BER_ERR_OID;
+  // arcs[0..1] are written unconditionally from the first subidentifier, so
+  // capacity must cover both before any store (issue #33).
+  if (*nArcs < 2) return BER_ERR_OVERFLOW;
 
   size_t start = *pos;
   size_t end = start + len;

@@ -122,6 +122,18 @@ static void test_oid(void) {
     from_hex(want, "060b2b06010401848b4a010100");
     expect_bytes(got, (size_t)n, want, 13, "OID with 67018 subid known bytes");
   }
+  // capacity 0/1 must be rejected before arcs[0..1] are written (issue 33)
+  {
+    uint32_t tiny[2];
+    size_t pos = 0;
+    uint8_t oid1[] = {0x06, 0x01, 0x2b};   // OID 1.3, single subidentifier
+    size_t nCap = 0;
+    ok_(berDecodeOid(oid1, sizeof oid1, &pos, tiny, &nCap) == BER_ERR_OVERFLOW,
+        "OID decode capacity 0 rejected");
+    pos = 0; nCap = 1;
+    ok_(berDecodeOid(oid1, sizeof oid1, &pos, tiny, &nCap) == BER_ERR_OVERFLOW,
+        "OID decode capacity 1 rejected");
+  }
   // roundtrip fuzz incl. large arcs
   for (int i = 0; i < 500; i++) {
     uint32_t arcs[8], back[8];

@@ -143,6 +143,10 @@ static void test_timeliness(void) {
   ok_(usmTimelinessCheck(&clk, 9999, now, 1005000) == USM_ERR_NOT_IN_TIME, "boots mismatch reject");
   // time now advances with ms
   ok_(usmTimeNow(&clk, 2000000) == 1000 + 1000, "usmTimeNow second boundary");
+  // derived time clamps to USM_TIME_MAX like the stored engine clock (issue 32)
+  UsmEngineClock sat = {1234, USM_TIME_MAX, 1000000};
+  ok_(usmTimeNow(&sat, 1000000) == USM_TIME_MAX, "usmTimeNow clamp at max");
+  ok_(usmTimeNow(&sat, 2000000) == USM_TIME_MAX, "usmTimeNow clamp past max");
 }
 
 static void test_msg_b_full(void) {

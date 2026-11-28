@@ -34,6 +34,10 @@ extern "C" {
 #define SNMPV3_AES_IV          16   // boots(4) || time(4) || salt(8)
 #define SNMPV3_PRIV_SALT       8    // RFC 3826 §3.1.2.1
 
+// RFC 3414: snmpEngineTime ranges 0..2147483647 (§2.3 upper bound). Shared by
+// the engine-clock updates (AgentCore) and the usmTimeNow() clamp.
+#define USM_TIME_MAX  2147483647u
+
 // Auth/priv protocol service IDs (SNMP-FRAMEWORK-MIB snmpAuthProtocols /
 // snmpPrivProtocols; needed by the MIB later, kept here as documentation):
 //   usmHMAC192SHA256AuthProtocol = 1.3.6.1.6.3.10.1.1.5

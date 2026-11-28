@@ -23,7 +23,8 @@ static const uint32_t kUsmStatsBase[] = {1, 3, 6, 1, 6, 3, 15, 1, 1};
 #define USM_STATS_BASE_LEN (sizeof kUsmStatsBase / sizeof kUsmStatsBase[0])
 
 #define USM_TIME_WINDOW 150u          // RFC 3414 §2.2.3
-#define USM_TIME_MAX    2147483647u   // RFC 3414: engineTime range
+// USM_TIME_MAX (RFC 3414 engineTime range) lives in USM.h, shared with the
+// usmTimeNow() clamp so both engine-clock paths obey the same bound.
 
 #define AGENT_MAX_VBS 32              // varbinds processed per request
 
@@ -94,6 +95,17 @@ int agentAddUser(AgentState* s, const char* name,
 
 static bool memEq(const void* a, const void* b, size_t n) {
   return memcmp(a, b, n) == 0;
+}
+
+// Constant-time equality for MAC verification (RFC 2104 §4 / RFC 7860):
+// early-exit memcmp leaks how many leading MAC bytes matched. OR-diffuse the
+// XOR of every byte pair and test once at the end.
+static bool ctMemEq(const void* a, const void* b, size_t n) {
+  const uint8_t* x = (const uint8_t*)a;
+  const uint8_t* y = (const uint8_t*)b;
+  uint8_t diff = 0;
+  for (size_t i = 0; i < n; i++) diff |= (uint8_t)(x[i] ^ y[i]);
+  return diff == 0;
 }
 
 // Fresh authoritative engine time (seconds), keeping the clock current.
@@ -541,7 +553,7 @@ int agentProcess(AgentState* s, const uint8_t* in0, size_t inLen,
     memset((void*)macRcv, 0, SNMPV3_SHA256_MAC);
     r = usmHmacSha256(user->authKey, SNMPV3_SHA256_KEY, in, inLen, digest);
     memcpy((void*)macRcv, saved, SNMPV3_SHA256_MAC);
-    if (r < 0 || memcmp(digest, saved, SNMPV3_SHA256_MAC) != 0) {
+    if (r < 0 || !ctMemEq(digest, saved, SNMPV3_SHA256_MAC)) {
       s->stats[4]++;
       if (!reportable) return AGENT_NO_RESPONSE;
       size_t n = 0;
@@ -954,7 +966,7 @@ int agentInformAck(AgentInform* inf, AgentState* s, const AgentUser* user,
     int r = usmHmacSha256(user->authKey, SNMPV3_SHA256_KEY, buf, respLen,
                           digest);
     memcpy((void*)mac, saved, SNMPV3_SHA256_MAC);
-    if (r < 0 || memcmp(digest, saved, SNMPV3_SHA256_MAC) != 0) return 0;
+    if (r < 0 || !ctMemEq(digest, saved, SNMPV3_SHA256_MAC)) return 0;
   }
 
   static uint8_t plain[AGENT_MAX_MSG];

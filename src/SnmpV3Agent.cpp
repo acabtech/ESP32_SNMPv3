@@ -46,6 +46,7 @@ static uint16_t s_trapPort = 162;
 static bool     s_trapBound = false;   // s_trapUdp bound to an ephemeral port
 static uint32_t s_msgIdCounter = 0;    // outgoing notification msgID source
 static AgentInform s_inform;           // pending inform (retry state machine)
+static uint32_t s_txFails = 0;         // UDP transmit failures (responses)
 #endif
 
 // engine ID override (setEngineId before begin)
@@ -149,9 +150,15 @@ void SnmpV3Agent::loop() {
       int res = agentProcess(&s_state, rx, (size_t)n, millis(),
                              tx, sizeof tx, &outLen);
       if (res == AGENT_RESPONSE && outLen > 0) {
-        s_udp.beginPacket(s_udp.remoteIP(), s_udp.remotePort());
-        s_udp.write(tx, outLen);
-        s_udp.endPacket();
+        // beginPacket/endPacket return 0 on transmit failure (no route, ARP
+        // failure, socket error); count it rather than dropping silently.
+        // The six usmStats counters all cover request-side events, so a
+        // response-path tx failure is tracked on a plain tx-fail counter.
+        if (s_udp.beginPacket(s_udp.remoteIP(), s_udp.remotePort()) != 1 ||
+            s_udp.write(tx, outLen) != (size_t)outLen ||
+            s_udp.endPacket() != 1) {
+          s_txFails++;
+        }
       }
       // AGENT_NO_RESPONSE / AGENT_ERR_DROP: silence (RFC 3412 reportable=0)
     }
@@ -298,9 +305,12 @@ bool SnmpV3Agent::sendInform(const char* oid, uint32_t instance) {
   // Arm the retry state machine and send the first attempt.
   if (agentInformStart(&s_inform, msg, msgLen, msgId, reqId, millis()) < 0)
     return false;
-  s_trapUdp.beginPacket(s_trapIp, s_trapPort);
-  s_trapUdp.write(msg, msgLen);
-  s_trapUdp.endPacket();
+  // Initial transmit failure: abort the retry machine instead of waiting out
+  // the full 5 s budget for a datagram that never left the stack.
+  if (s_trapUdp.beginPacket(s_trapIp, s_trapPort) != 1 ||
+      s_trapUdp.write(msg, msgLen) != (size_t)msgLen ||
+      s_trapUdp.endPacket() != 1)
+    return false;
 
   // Bounded wait for the manager's Response (RFC 3416 §3.2.5): pump the
   // notification socket, resend on the retry schedule, give up at 5 s.
@@ -321,9 +331,13 @@ bool SnmpV3Agent::sendInform(const char* oid, uint32_t instance) {
     }
     int t = agentInformTick(&s_inform, millis());
     if (t == 1) {
-      s_trapUdp.beginPacket(s_trapIp, s_trapPort);
-      s_trapUdp.write(s_inform.msg, s_inform.msgLen);
-      s_trapUdp.endPacket();
+      // A failed retry send also ends the wait: retransmits keep failing
+      // until the budget expires, so stop early rather than spinning.
+      if (s_trapUdp.beginPacket(s_trapIp, s_trapPort) != 1 ||
+          s_trapUdp.write(s_inform.msg, s_inform.msgLen) !=
+              (size_t)s_inform.msgLen ||
+          s_trapUdp.endPacket() != 1)
+        return false;
     } else if (t < 0) {
       return false;
     }
