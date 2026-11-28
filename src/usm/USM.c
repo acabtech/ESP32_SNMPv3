@@ -187,9 +187,13 @@ int usmBuildSecurityParams(uint8_t* out, size_t cap,
 }
 
 // --- Timeliness (RFC 3414 §2.2.3) ------------------------------------------
+// Derived "engine time now" is clamped to USM_TIME_MAX (RFC 3414 §2.3) so the
+// timeliness window is evaluated against the same saturated reference the
+// engine clock itself obeys.
 uint32_t usmTimeNow(const UsmEngineClock* clock, uint32_t nowMs) {
   uint32_t elapsed = (uint32_t)((uint32_t)(nowMs - (uint32_t)clock->monotonicMs) / 1000u);
-  return clock->time + elapsed;
+  uint32_t t = clock->time + elapsed;
+  return (t > USM_TIME_MAX) ? USM_TIME_MAX : t;
 }
 
 int usmTimelinessCheck(const UsmEngineClock* authoritative,
